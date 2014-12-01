@@ -34,6 +34,7 @@ hx::Object *__hxcpp_weak_ref_create(Dynamic inObject);
 hx::Object *__hxcpp_weak_ref_get(Dynamic inRef);
 
 
+unsigned int __hxcpp_obj_hash(Dynamic inObj);
 int __hxcpp_obj_id(Dynamic inObj);
 hx::Object *__hxcpp_id_obj(int);
 
@@ -42,6 +43,7 @@ namespace hx
 
 extern int gPauseForCollect;
 void PauseForCollect();
+bool IsWeakRefValid(hx::Object *inPtr);
 
 void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx);
 
@@ -96,7 +98,7 @@ void GCCheckPointer(void *);
 void *InternalNew(int inSize,bool inIsObject);
 void *InternalRealloc(void *inData,int inSize);
 void InternalEnableGC(bool inEnable);
-void *InternalCreateConstBuffer(const void *inData,int inSize);
+void *InternalCreateConstBuffer(const void *inData,int inSize,bool inAddStringHash=false);
 void RegisterNewThread(void *inTopOfStack);
 void SetTopOfStack(void *inTopOfStack,bool inForce=false);
 int InternalCollect(bool inMajor,bool inCompact);
@@ -157,6 +159,9 @@ inline void EnsureObjPtr(hx::Object *) { }
 
 
 #define HX_GC_CONST_ALLOC_BIT  0x80000000
+#define HX_GC_CONST_ALLOC_MARK_BIT  0x80
+#define HX_GC_NO_STRING_HASH   0x40000000
+#define HX_GC_NO_HASH_MASK     (HX_GC_CONST_ALLOC_BIT | HX_GC_NO_STRING_HASH)
 
 #define HX_MARK_STRING(ioPtr) \
    if (ioPtr && !(((unsigned int *)ioPtr)[-1] & HX_GC_CONST_ALLOC_BIT) ) hx::MarkAlloc((void *)ioPtr, __inCtx );

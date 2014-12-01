@@ -2,6 +2,7 @@
 
 #include <hx/GC.h>
 #include <hx/Thread.h>
+#include "Hash.h"
 
 int gByteMarkID = 0;
 int gMarkID = 0;
@@ -41,6 +42,8 @@ int gInAlloc = false;
 #else
   enum { MAX_MARK_THREADS = 1 };
 #endif
+
+enum { MARK_BYTE_MASK = 0x7f };
 
 
 enum
@@ -576,7 +579,7 @@ union BlockData
          return allocNone;
       }
       unsigned char time = mRow[0][inOffset+ENDIAN_MARK_ID_BYTE_HEADER];
-      if ( ((time+1) & 0xff) != gByteMarkID )
+      if ( ((time+1) & MARK_BYTE_MASK) != gByteMarkID )
       {
          // Object is either out-of-date, or already marked....
          if (inReport)
@@ -693,7 +696,7 @@ union BlockData
 
 #define MARK_ROWS \
    unsigned char &mark = ((unsigned char *)inPtr)[ENDIAN_MARK_ID_BYTE]; \
-   if ( mark==gByteMarkID  ) \
+   if ( mark==gByteMarkID || mark & HX_GC_CONST_ALLOC_MARK_BIT) \
       return; \
    mark = gByteMarkID; \
  \
@@ -724,7 +727,7 @@ namespace hx
 void GCCheckPointer(void *inPtr)
 {
    unsigned char&mark = ((unsigned char *)inPtr)[ENDIAN_MARK_ID_BYTE];
-   if ( mark!=0xff && mark!=gByteMarkID  )
+   if ( !(mark & HX_GC_CONST_ALLOC_MARK_BIT) && mark!=gByteMarkID  )
    {
       GCLOG("Old object %s\n", ((hx::Object *)inPtr)->toString().__s );
       NullReference("Object", false);
@@ -1149,6 +1152,9 @@ FILE_SCOPE MakeZombieSet sMakeZombieSet;
 typedef hx::QuickVec<hx::Object *> ZombieList;
 FILE_SCOPE ZombieList sZombieList;
 
+typedef hx::QuickVec<hx::HashBase<Dynamic> *> WeakHashList;
+FILE_SCOPE WeakHashList sWeakHashList;
+
 
 InternalFinalizer::InternalFinalizer(hx::Object *inObj)
 {
@@ -1189,6 +1195,30 @@ void FindZombies(MarkContext &inContext)
       i = next;
    }
 }
+
+bool IsWeakRefValid(hx::Object *inPtr)
+{
+   unsigned char mark = ((unsigned char *)inPtr)[ENDIAN_MARK_ID_BYTE];
+
+    // Special case of member closure - check if the 'this' pointer is still alive
+    bool isCurrent = mark==gByteMarkID;
+    if ( !isCurrent && inPtr->__GetType()==vtFunction)
+    {
+        hx::Object *thiz = (hx::Object *)inPtr->__GetHandle();
+        if (thiz)
+        {
+            mark = ((unsigned char *)thiz)[ENDIAN_MARK_ID_BYTE];
+            if (mark==gByteMarkID)
+            {
+               // The object is still alive, so mark the closure and continue
+               MarkAlloc(inPtr,0);
+               return true;
+            }
+         }
+    }
+    return isCurrent;
+}
+
 
 void RunFinalizers()
 {
@@ -1248,6 +1278,25 @@ void RunFinalizers()
       i = next;
    }
 
+   for(int i=0;i<sWeakHashList.size();    )
+   {
+      HashBase<Dynamic> *ref = sWeakHashList[i];
+      unsigned char mark = ((unsigned char *)ref)[ENDIAN_MARK_ID_BYTE];
+      // Object itself is gone - no need to worrk about that again
+      if ( mark!=gByteMarkID )
+      {
+         sWeakHashList.qerase(i);
+         // no i++ ...
+      }
+      else
+      {
+         ref->updateAfterGc();
+         i++;
+      }
+   }
+
+
+
    for(int i=0;i<sWeakRefs.size();    )
    {
       WeakRef *ref = sWeakRefs[i];
@@ -1293,6 +1342,11 @@ void RunFinalizers()
 // Callback finalizer on non-abstract type;
 void  GCSetFinalizer( hx::Object *obj, hx::finalizer f )
 {
+   if (!obj)
+      throw Dynamic(HX_CSTRING("set_finalizer - invalid null object"));
+   if (((unsigned int *)obj)[-1] & HX_GC_CONST_ALLOC_BIT)
+      throw Dynamic(HX_CSTRING("set_finalizer - invalid const object"));
+
    AutoLock lock(*gSpecialObjectLock);
    if (f==0)
    {
@@ -1306,6 +1360,11 @@ void  GCSetFinalizer( hx::Object *obj, hx::finalizer f )
 
 void GCDoNotKill(hx::Object *inObj)
 {
+   if (!inObj)
+      throw Dynamic(HX_CSTRING("doNotKill - invalid null object"));
+   if (((unsigned int *)inObj)[-1] & HX_GC_CONST_ALLOC_BIT)
+      throw Dynamic(HX_CSTRING("doNotKill - invalid const object"));
+
    AutoLock lock(*gSpecialObjectLock);
    sMakeZombieSet.insert(inObj);
 }
@@ -1319,6 +1378,14 @@ hx::Object *GCGetNextZombie()
    return result;
 }
 
+void RegisterWeakHash(HashBase<Dynamic> *inHash)
+{
+   AutoLock lock(*gSpecialObjectLock);
+   sWeakHashList.push(inHash);
+}
+
+
+
 void InternalEnableGC(bool inEnable)
 {
    //printf("Enable %d\n", sgInternalEnable);
@@ -1326,14 +1393,28 @@ void InternalEnableGC(bool inEnable)
 }
 
 
-void *InternalCreateConstBuffer(const void *inData,int inSize)
+void *InternalCreateConstBuffer(const void *inData,int inSize,bool inAddStringHash)
 {
-   int *result = (int *)malloc(inSize + sizeof(int));
+   bool addHash = inAddStringHash && inData && inSize>0;
 
-   *result = 0xffffffff;
-   memcpy(result+1,inData,inSize);
+   int *result = (int *)malloc(inSize + sizeof(int) + (addHash ? sizeof(int):0) );
+   if (addHash)
+   {
+      result[0] =  String( (HX_CHAR *)inData, inSize-1).hash();
+      result++;
+      *result++ = HX_GC_CONST_ALLOC_BIT;
+   }
+   else
+   {
+      *result++ = HX_GC_CONST_ALLOC_BIT | HX_GC_NO_STRING_HASH;
+   }
 
-   return result+1;
+   if (inData)
+      memcpy(result,inData,inSize);
+   else
+      memset(result,0,inSize);
+
+   return result;
 }
 
 
@@ -1686,6 +1767,8 @@ public:
           hx::sObjectIdMap[inTo] = id->second;
           hx::sObjectIdMap.erase(id);
        }
+
+       // Maybe do something faster with weakmaps
    }
 
 
@@ -2060,7 +2143,7 @@ public:
    void MarkAll(bool inDoClear)
    {
       // Bit 0x80 is reserved for "const allocation"
-      gByteMarkID = (gByteMarkID+1) & 0x7f;
+      gByteMarkID = (gByteMarkID+1) & MARK_BYTE_MASK;
       gMarkID = gByteMarkID << 24;
       gBlockStack = 0;
 
@@ -3049,8 +3132,6 @@ void *InternalRealloc(void *inData,int inSize)
    return new_data;
 }
 
-
-
 void RegisterCurrentThread(void *inTopOfStack)
 {
    // Create a local-alloc
@@ -3081,16 +3162,19 @@ void UnregisterCurrentThread()
 namespace hx
 {
 
-void *Object::operator new( size_t inSize, bool inContainer )
+void *Object::operator new( size_t inSize, NewObjectType inType )
 {
    #if defined(HXCPP_DEBUG)
    if (inSize>=IMMIX_LARGE_OBJ_SIZE)
       throw Dynamic(HX_CSTRING("Object size violation"));
    #endif
 
+   if (inType==NewObjConst)
+      return InternalCreateConstBuffer(0,inSize);
+
    LocalAllocator *tla = GetLocalAlloc();
 
-   return tla->Alloc(inSize,inContainer);
+   return tla->Alloc(inSize,inType==NewObjContainer);
 }
 
 }
@@ -3216,6 +3300,26 @@ hx::Object *__hxcpp_id_obj(int inId)
    return (hx::Object *)(inId);
    #endif
 }
+
+#if defined(HXCPP_GC_MOVING) || defined(HXCPP_FORCE_OBJ_MAP)
+unsigned int __hxcpp_obj_hash(Dynamic inObj)
+{
+   return __hxcpp_obj_id(inObj);
+}
+#else
+unsigned int __hxcpp_obj_hash(Dynamic inObj)
+{
+   if (!inObj.mPtr) return 0;
+   hx::Object *obj = inObj->__GetRealObject();
+   #if defined(HXCPP_M64)
+   size_t h64 = (size_t)obj;
+   return (unsigned int)(h64>>2) ^ (unsigned int)(h64>>32);
+   #else
+   return ((unsigned int)inObj.mPtr) >> 4;
+   #endif
+}
+#endif
+
 
 
 
