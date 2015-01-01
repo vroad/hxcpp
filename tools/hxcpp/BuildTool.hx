@@ -111,6 +111,8 @@ class BuildTool
 
       setupAppleDirectories(mDefines);
 
+      if (isMsvc())
+         mDefines.set("isMsvc","1");
 
       include("toolchain/finish-setup.xml");
 
@@ -191,6 +193,9 @@ class BuildTool
 
       for(target in inTargets)
          buildTarget(target);
+      
+      if (threadExitCode != 0)
+         Sys.exit(threadExitCode);
    }
 
    public function pushFile(inFilename:String, inWhy:String, inSection:String="")
@@ -510,7 +515,18 @@ class BuildTool
                         file.mDepends.push( substitute(f.att.name) );
                   group.mFiles.push( file );
                case "section" : createFileGroup(el,group,inName);
-               case "depend" : group.addDepend( substitute(el.att.name) );
+               case "depend" :
+                  if (el.has.name)
+                     group.addDepend( substitute(el.att.name) );
+                  else if (el.has.files)
+                  {
+                     var name = substitute(el.att.files);
+                     if (!mFileGroups.exists(name))
+                         Log.error( "Could not find filegroup for depend node:" + name ); 
+                     group.addDependFiles(mFileGroups.get(name));
+                  }
+                  else
+                     Log.error("depend node must have 'name' or 'files' attribute");
                case "hlsl" :
                   group.addHLSL( substitute(el.att.name), substitute(el.att.profile),
                   substitute(el.att.variable), substitute(el.att.target)  );
@@ -1290,9 +1306,19 @@ class BuildTool
                                    el.has.toolId ?  substitute(el.att.toolId) : null ) );
                case "section" : 
                   parseXML(el,"");
+
+               case "pleaseUpdateHxcppTool" : 
+                  checkToolVersion( substitute(el.att.version) );
             }
          }
       }
+   }
+
+   public function checkToolVersion(inVersion:String)
+   {
+      var ver = Std.parseInt(inVersion);
+      if (ver<1)
+         Log.error("Your version of hxcpp.n is out-of-date.  Please update.");
    }
 
 
@@ -1346,6 +1372,13 @@ class BuildTool
          {
             sub = PathManager.getHaxelib(sub.substr(8));
             sub = PathManager.standardize(sub);
+         }
+         else if (sub.substr(0,13)=="removeQuotes:")
+         {
+            sub = mDefines.get(sub.substr(13));
+            var len = sub.length;
+            if (len>1 && sub.substr(0,1)=="\"" && sub.substr(len-1)=="\"")
+               sub = sub.substr(1,len-2);
          }
          else
             sub = mDefines.get(sub);
