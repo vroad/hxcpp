@@ -133,7 +133,7 @@ class BuildTool
 
       parseXML(xml,"");
       popFile();
-
+      
       include("toolchain/" + mDefines.get("toolchain") + "-toolchain.xml");
       
       if (mDefines.exists("HXCPP_CONFIG"))

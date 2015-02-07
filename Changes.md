@@ -1,4 +1,11 @@
 
+* Make compares between Dynamic and numeric types false, unless the Dynamic is actaully numeric
+------------------------------------------------------------
+* Even more optimizations for hashes
+* Some more optimizations for small hashes
+* Fix for google changing inlining in platform21 headers (atof, rand, srand)
+* Re-tuned Hash for small objects too (improves Anon object perforamce)
+* Reverted change that automatically threw 'BadCast'.  Now required HXCPP_STRICT_CASTS
 ------------------------------------------------------------
 * Cached dynamic versions of small ints and 1-char-strings for speed
 * Added support for weak hashes - needs latest haxe version

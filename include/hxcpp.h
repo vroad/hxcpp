@@ -10,21 +10,6 @@
 #ifdef _MSC_VER
    #include <typeinfo.h>
    namespace hx { typedef ::type_info type_info; }
-   #undef TRUE
-   #undef FALSE
-   #undef BOOLEAN
-   #undef ERROR
-   #undef NO_ERROR
-   #undef DELETE
-   #undef OPTIONS
-   #undef IN
-   #undef OUT
-   #undef ALTERNATE
-   #undef OPTIONAL
-   #undef DOUBLE_CLICK
-   #undef DIFFERENCE
-   #undef POINT
-   #undef RECT
 #else
    #include <typeinfo>
    #include <stdint.h>
@@ -161,6 +146,7 @@ typedef float Float;
 typedef double Float;
 #endif
 
+
 // Extended mapping - cpp namespace
 namespace cpp
 {
@@ -217,7 +203,28 @@ public:
    virtual void visitAlloc(void **ioPtr)=0;
 };
 
+
+
+#if (HXCPP_API_LEVEL >= 313)
+enum PropertyAccessMode
+{
+   paccNever   = 0,
+   paccDynamic = 1,
+   paccAlways  = 2,
+};
+typedef PropertyAccessMode PropertyAccess;
+#define HX_PROP_NEVER  hx::paccNever
+#define HX_PROP_DYNAMIC hx::paccDynamic
+#define HX_PROP_ALWAYS hx::paccAlways
+#else
+typedef bool PropertyAccess;
+#define HX_PROP_NEVER  false
+#define HX_PROP_DYNAMIC true
+#define HX_PROP_ALWAYS true
+#endif
+
 } // end namespace hx
+
 
 
 

@@ -4,7 +4,22 @@ class RunMain
    public static function log(s:String) Sys.println(s);
    public static function showMessage()
    {
-      log("This version of hxcpp appears to be a source/developement version.");
+      var varName = "HXCPP_NONINTERACTIVE";
+      var nonInteractive:Bool =Sys.getEnv(varName)!=null;
+      if (!nonInteractive)
+         for(arg in Sys.args())
+            if (arg.indexOf("-D"+varName)==0 )
+               nonInteractive = true;
+
+      var dir = Sys.getCwd();
+
+      if (nonInteractive)
+      {
+         Sys.println('HXCPP in $dir is missing hxcpp.n');
+         Sys.exit(-1);
+      }
+
+      log('This version of hxcpp ($dir) appears to be a source/developement version.');
       log("Before this can be used, you need to:");
       log(" 1. Rebuild the main command-line tool, this can be done with:");
       log("     cd tools/hxcpp");
@@ -13,10 +28,22 @@ class RunMain
       log("     cd project");
       log("     neko build.n");
 
+      var gotUserResponse = false;
+      neko.vm.Thread.create(function() {
+         Sys.sleep(30);
+         if (!gotUserResponse)
+         {
+            Sys.println("\nTimeout waiting for response.");
+            Sys.println("Can't continue without hxcpp.n");
+            Sys.exit(-1);
+         }
+      } );
+
       while(true)
       {
          Sys.print("\nWould you like to do this now [y/n]");
          var code = Sys.getChar(true);
+         gotUserResponse = true;
          if (code<=32)
             break;
          var answer = String.fromCharCode(code);
@@ -24,13 +51,16 @@ class RunMain
          {
             log("");
             setup();
-            executeHxcpp();
+            if (!executeHxcpp())
+               break;
             return;
          }
          if (answer=="n" || answer=="N")
             break;
       }
-      log("");
+
+      Sys.println("\nCan't continue without hxcpp.n");
+      Sys.exit(-1);
    }
 
    public static function setup()
@@ -57,14 +87,10 @@ class RunMain
 
    public static function executeHxcpp()
    {
-      try
-      {
-         return neko.vm.Loader.local().loadModule("./hxcpp.n")!=null;
-      }
-      catch(e:Dynamic)
-      {
-      }
-      return false;
+      if (!sys.FileSystem.exists("./hxcpp.n"))
+         return false;
+      neko.vm.Loader.local().loadModule("./hxcpp.n");
+      return true;
    }
 
    public static function main()

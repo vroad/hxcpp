@@ -61,6 +61,9 @@
   <options name="Options.txt"/>
   <depend name="${HXCPP}/src/hx/cppia/Cppia.h" />
   <depend name="${HXCPP}/src/hx/cppia/CppiaStream.h" />
+  <depend name="${HXCPP}/src/hx/cppia/CppiaCompiler.h" />
+  <compilerflag value="-DHX_UNDEFINE_H" />
+  <compilerflag value="-DCPPIA_JIT" if="CPPIA_JIT" />
 
   <file name = "src/hx/cppia/Cppia.cpp" />
   <file name = "src/hx/cppia/CppiaCtx.cpp" />
@@ -69,13 +72,14 @@
   <file name = "src/hx/cppia/GLobalBuiltin.cpp" />
   <file name = "src/hx/cppia/HaxeNative.cpp" />
   <file name = "src/hx/cppia/CppiaVars.cpp" />
+  <file name = "src/hx/cppia/CppiaCompiler.cpp" />
 </files>
 
 
 <files id="runtime" dir="${HXCPP}">
   <depend files="hxcpp-depends"/>
   <options name="Options.txt"/>
-
+  <depend name="${HXCPP}/src/hx/Hash.h"/>
 
   <compilerflag value="-D_CRT_SECURE_NO_DEPRECATE"/>
 
