@@ -16,9 +16,9 @@
 
 #define HX_DO_RTTI_ALL \
    HX_DO_RTTI_BASE \
-   static hx::ObjectPtr<Class_obj> __mClass; \
-   hx::ObjectPtr<Class_obj > __GetClass() const { return __mClass; } \
-   inline static hx::ObjectPtr<Class_obj> &__SGetClass() { return __mClass; } \
+   static hx::ObjectPtr<hx::Class_obj> __mClass; \
+   hx::ObjectPtr<hx::Class_obj > __GetClass() const { return __mClass; } \
+   inline static hx::ObjectPtr<hx::Class_obj> &__SGetClass() { return __mClass; } \
    inline operator super *() { return this; } 
 
 #define HX_DO_RTTI \
@@ -28,8 +28,8 @@
    void __GetFields(Array< ::String> &outFields);
 
 #define HX_DO_INTERFACE_RTTI \
-   static hx::ObjectPtr<Class_obj> __mClass; \
-   static hx::ObjectPtr<Class_obj> &__SGetClass() { return __mClass; } \
+   static hx::ObjectPtr<hx::Class_obj> __mClass; \
+   static hx::ObjectPtr<hx::Class_obj> &__SGetClass() { return __mClass; } \
 	static void __register();
 
 #define HX_DO_ENUM_RTTI_INTERNAL \
@@ -40,9 +40,9 @@
 
 #define HX_DO_ENUM_RTTI \
    HX_DO_ENUM_RTTI_INTERNAL \
-   static hx::ObjectPtr<Class_obj> __mClass; \
-   hx::ObjectPtr<Class_obj > __GetClass() const { return __mClass; } \
-   static hx::ObjectPtr<Class_obj> &__SGetClass() { return __mClass; }
+   static hx::ObjectPtr<hx::Class_obj> __mClass; \
+   hx::ObjectPtr<hx::Class_obj > __GetClass() const { return __mClass; } \
+   static hx::ObjectPtr<hx::Class_obj> &__SGetClass() { return __mClass; }
 
 
 #define HX_DECLARE_IMPLEMENT_DYNAMIC  Dynamic __mDynamicFields; \
@@ -693,30 +693,51 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void SetTopOfStack(int *inTopOfStack,bool);
 }
 
 
-#elif defined(ANDROID)
-// Java Main....
-#include <jni.h>
-#include <hx/Thread.h>
-#include <android/log.h>
+#elif defined(HX_ANDROID)
+  #ifdef HXCPP_EXE_LINK
+   #define HX_BEGIN_MAIN \
+   \
+   int main(int argc,char **argv){ \
+      HX_TOP_OF_STACK \
+      hx::Boot(); \
+      try{ \
+         __boot_all();
 
-#define HX_BEGIN_MAIN \
-extern "C" EXPORT_EXTRA void hxcpp_main() { \
-	HX_TOP_OF_STACK \
-        try { \
-	hx::Boot(); \
-	__boot_all();
+   #define HX_END_MAIN \
+      } \
+      catch (Dynamic e){ \
+         __hx_dump_stack(); \
+         printf("Error : %s\n",e->toString().__CStr()); \
+         return -1; \
+      } \
+      return 0; \
+   }
+
+  #else
+   // Java Main....
+   #include <jni.h>
+   #include <hx/Thread.h>
+   #include <android/log.h>
+
+   #define HX_BEGIN_MAIN \
+   extern "C" EXPORT_EXTRA void hxcpp_main() { \
+      HX_TOP_OF_STACK \
+           try { \
+      hx::Boot(); \
+      __boot_all();
 
 
-#define HX_END_MAIN \
-        } catch (Dynamic e) { \
-	  __hx_dump_stack(); \
-          __android_log_print(ANDROID_LOG_ERROR, "Exception", "%s", e->toString().__CStr()); \
-        }\
-	hx::SetTopOfStack((int *)0,true); \
-} \
-\
-extern "C" EXPORT_EXTRA JNIEXPORT void JNICALL Java_org_haxe_HXCPP_main(JNIEnv * env) \
-{ hxcpp_main(); }
+   #define HX_END_MAIN \
+           } catch (Dynamic e) { \
+        __hx_dump_stack(); \
+             __android_log_print(ANDROID_LOG_ERROR, "Exception", "%s", e->toString().__CStr()); \
+           }\
+      hx::SetTopOfStack((int *)0,true); \
+   } \
+   \
+   extern "C" EXPORT_EXTRA JNIEXPORT void JNICALL Java_org_haxe_HXCPP_main(JNIEnv * env) \
+   { hxcpp_main(); }
+  #endif
 
 #elif defined(HX_WINRT)
 

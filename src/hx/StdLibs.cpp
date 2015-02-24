@@ -185,7 +185,7 @@ void __trace(Dynamic inObj, Dynamic inData)
       "%s\n", inObj.GetPtr() ? inObj->toString().__s : "null" );
 #else
 #ifdef HX_UTF8_STRINGS
-   #ifdef ANDROID
+   #if defined(HX_ANDROID) && !defined(HXCPP_EXE_LINK)
    __android_log_print(ANDROID_LOG_INFO, "trace","%s:%d: %s",
    #elif defined(WEBOS)
    syslog(LOG_INFO, "%s:%d: %s",
@@ -351,7 +351,7 @@ bool __instanceof(const Dynamic &inValue, const Dynamic &inType)
       return true;
    if (inValue==null())
       return false;
-   Class c = inType;
+   hx::Class c = inType;
    if (c==null())
       return false;
    return c->CanCast(inValue.GetPtr());

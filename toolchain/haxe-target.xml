@@ -15,7 +15,7 @@
   <depend name="${HXCPP}/include/hxString.h"/>
   <depend name="${HXCPP}/include/hxMath.h"/>
   <depend name="${HXCPP}/include/null.h"/>
-  <depend name="${HXCPP}/include/Class.h"/>
+  <depend name="${HXCPP}/include/hx/Class.h"/>
   <depend name="${HXCPP}/include/Enum.h"/>
   <depend name="${HXCPP}/include/hx/Debug.h"/>
   <depend name="${HXCPP}/include/hx/Object.h"/>
@@ -45,6 +45,7 @@
 
 <files id="__main__">
   <depend files="hxcpp-depends"/>
+  <depend name="${HXCPP}/include/hx/HxcppMain.h"/>
   <options name="Options.txt"/>
   <compilerflag value="-DHX_DECLARE_MAIN"/>
 </files>
@@ -69,7 +70,7 @@
   <file name = "src/hx/cppia/CppiaCtx.cpp" />
   <file name = "src/hx/cppia/ArrayBuiltin.cpp" />
   <file name = "src/hx/cppia/StringBuiltin.cpp" />
-  <file name = "src/hx/cppia/GLobalBuiltin.cpp" />
+  <file name = "src/hx/cppia/GlobalBuiltin.cpp" />
   <file name = "src/hx/cppia/HaxeNative.cpp" />
   <file name = "src/hx/cppia/CppiaVars.cpp" />
   <file name = "src/hx/cppia/CppiaCompiler.cpp" />
@@ -103,7 +104,7 @@
   <file name = "src/hx/RunLibs.cpp" if="static_link"/>
 
   <file name = "src/Array.cpp"/>
-  <file name = "src/Class.cpp"/>
+  <file name = "src/hx/Class.cpp"/>
   <file name = "src/Dynamic.cpp"/>
   <file name = "src/Enum.cpp"/>
   <file name = "src/Math.cpp"/>
@@ -121,12 +122,18 @@
   <dir name="obj"/>
 </target>
 
-<target id="haxe" tool="linker" toolid="${haxelink}" output="${HAXE_OUTPUT}${DBG}">
+<target id="haxe" tool="linker" toolid="${haxelink}" output="${LIBPREFIX}${HAXE_OUTPUT}${DBG}">
   <files id="haxe"/>
   <depend name="Options.txt"/>
   <ext value="${LIBEXTRA}.a" if="iphoneos" unless="dll_import" />
   <ext value="${LIBEXTRA}.a" if="iphonesim" unless="dll_import" />
-  <ext value="${LIBEXTRA}.so" if="android"/>
+
+  <section if="android">
+     <ext value="${LIBEXTRA}.so" />
+     <ext value="${LIBEXTRA}.a"  if="static_link" />
+     <ext value="${LIBEXTRA}" if="exe_link" />
+  </section>
+
   <files id="__main__" unless="static_link" />
   <files id="__lib__" if="static_link"/>
   <files id="runtime" unless="dll_import" />

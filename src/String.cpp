@@ -52,7 +52,7 @@ using namespace hx;
 
 // --- GC helper
 
-Class __StringClass;
+hx::Class __StringClass;
 
 String  sConstStrings[256];
 Dynamic sConstDynamicStrings[256];
@@ -346,6 +346,14 @@ String::String(const double &inRHS)
    __s = GCStringDup(buf,-1,&length);
 }
 
+
+String::String(const cpp::Int64 &inRHS)
+{
+   HX_CHAR buf[100];
+   SPRINTF(buf,100,"%lld",inRHS);
+   buf[99]='\0';
+   __s = GCStringDup(buf,-1,&length);
+}
 
 String::String(const float &inRHS)
 {
@@ -1067,7 +1075,7 @@ public:
 
    StringData(String inValue) : mValue(inValue) {};
 
-   Class __GetClass() const { return __StringClass; }
+   hx::Class __GetClass() const { return __StringClass; }
    bool __Is(hx::Object *inClass) const { return dynamic_cast< StringData *>(inClass); }
 
    virtual int __GetType() const { return vtString; }
@@ -1125,7 +1133,7 @@ public:
    String mValue;
 };
 
-Class &GetStringClass() { return __StringClass; }
+hx::Class &GetStringClass() { return __StringClass; }
 
 }
 

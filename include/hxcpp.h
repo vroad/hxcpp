@@ -180,8 +180,16 @@ namespace hx { class IndexRef; }
 namespace hx { template<typename O> class ObjectPtr; }
 template<typename ELEM_> class Array_obj;
 template<typename ELEM_> class Array;
-class Class_obj;
-typedef hx::ObjectPtr<Class_obj> Class;
+namespace hx {
+   class Class_obj;
+   typedef hx::ObjectPtr<hx::Class_obj> Class;
+}
+
+#if (HXCPP_API_LEVEL < 320) && !defined(__OBJC__)
+typedef hx::Class Class;
+typedef hx::Class_obj Class_obj;
+#endif
+
 class Dynamic;
 class String;
 
@@ -243,16 +251,16 @@ typedef bool PropertyAccess;
 #include <hx/FieldRef.h>
 #include <hx/Anon.h>
 #include "Array.h"
-#include "Class.h"
+#include <hx/Class.h>
 #include "Enum.h"
 #include <hx/Interface.h>
 #include <hx/StdLibs.h>
+#include <cpp/Pointer.h>
 #include <hx/Operators.h>
 #include <hx/Functions.h>
 #include <hx/Debug.h>
 #include <hx/Boot.h>
 #include <hx/Undefine.h>
-#include <cpp/Pointer.h>
 
 #endif
 
