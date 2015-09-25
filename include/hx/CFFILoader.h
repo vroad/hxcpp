@@ -737,9 +737,11 @@ void * default_alloc_empty_string(int) { return 0; }
 // Do nothing on earlier versions of hxcpp that do not know what to do
 void default_gc_change_managed_memory(int,const char *) { }
 
+void * default_hx_register_prim(const char * arg1, void* arg2) { return 0; }
+
 void *ResolveDefault(const char *inName)
 {
-   void *result = sResolveProc(inName);
+   void *result = sResolveProc ? sResolveProc(inName) : 0;
    if (result)
       return result;
    if (!strcmp(inName,"val_is_buffer"))
@@ -748,6 +750,8 @@ void *ResolveDefault(const char *inName)
       return (void *)default_alloc_empty_string;
    if (!strcmp(inName,"gc_change_managed_memory"))
       return (void *)default_gc_change_managed_memory;
+   if (!strcmp(inName,"hx_register_prim"))
+      return (void*)default_hx_register_prim;
    return 0;
 }
 
@@ -811,7 +815,7 @@ void *LoadFunc(const char *inName)
    {
       #ifdef ANDROID
       __android_log_print(ANDROID_LOG_ERROR, "CFFILoader.h", "Could not API %s", inName);
-      return 0;
+      //return 0;
       #else
       #ifdef NEKO_COMPATIBLE
       fprintf(stderr,"Could not link plugin to process (hxCFFILoader.h %d) - with neko\n",__LINE__);
