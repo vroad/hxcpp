@@ -138,22 +138,49 @@ struct MyMutex
 };
 
 #ifndef HX_WINRT
-template<typename DATA>
+template<typename DATA,bool FAST=false>
 struct TLSData
 {
+   static const size_t kMaxInlineSlots = 64;
+
    TLSData()
    {
       mSlot = TlsAlloc();
       TlsSetValue(mSlot,0);
+      #ifdef HXCPP_M64
+      mFastOffset = mSlot*sizeof(void *) + 0x1480;
+      #else
+      if (FAST || mSlot < kMaxInlineSlots)
+         mFastOffset = mSlot*sizeof(void *) + 0xE10;
+      else
+         mFastOffset = mSlot - kMaxInlineSlots;
+      #endif
    }
    inline DATA *operator=(DATA *inData)
    {
       TlsSetValue(mSlot,inData);
       return inData;
    }
-   inline operator DATA *() { return (DATA *)TlsGetValue(mSlot); }
+
+   inline operator DATA *()
+   {
+      #if !defined(HXCPP_M64) && (_MSC_VER >= 1400)
+      const size_t kTibExtraTlsOffset = 0xF94;
+
+      if (FAST || mSlot < kMaxInlineSlots)
+        return (DATA *)__readfsdword(mFastOffset);
+
+      DATA **extra = (DATA **)(__readfsdword(kTibExtraTlsOffset));
+      return extra[mFastOffset];
+      #elif (_MSC_VER >= 1400) & !defined(HXCPP_DEBUG)// 64 bit version...
+      return (DATA *)__readgsqword(mFastOffset);
+      #else
+      return (DATA *)TlsGetValue(mSlot);
+      #endif
+   }
 
    int mSlot;
+   int mFastOffset;
 };
 
 #endif
@@ -199,11 +226,23 @@ struct MyMutex
 
 #define DECLARE_TLS_DATA(TYPE,NAME) \
    __declspec(thread) TYPE * NAME = nullptr;
+#define DECLARE_FAST_TLS_DATA(TYPE,NAME) \
+   __declspec(thread) TYPE * NAME = nullptr;
+#define EXTERN_TLS_DATA(TYPE,NAME) \
+   __declspec(thread) extern TYPE * NAME = nullptr;
+#define EXTERN_FAST_TLS_DATA(TYPE,NAME) \
+   __declspec(thread) extern TYPE * NAME = nullptr;
 
 #else
 
 #define DECLARE_TLS_DATA(TYPE,NAME) \
    TLSData<TYPE> NAME;
+#define DECLARE_FAST_TLS_DATA(TYPE,NAME) \
+   TLSData<TYPE,true> NAME;
+#define EXTERN_TLS_DATA(TYPE,NAME) \
+   extern TLSData<TYPE> NAME;
+#define EXTERN_FAST_TLS_DATA(TYPE,NAME) \
+   extern TLSData<TYPE,true> NAME;
 
 #endif
 
@@ -263,7 +302,7 @@ struct MySemaphore
 #else
 
 
-template<typename DATA>
+template<typename DATA,bool FAST=false>
 struct TLSData
 {
    TLSData()

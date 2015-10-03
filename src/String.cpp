@@ -5,6 +5,10 @@
 
 using namespace hx;
 
+#if defined(BLACKBERRY)
+using namespace std;
+#endif
+
 // -------- String ----------------------------------------
 
 
@@ -364,7 +368,7 @@ String::String(const double &inRHS)
 String::String(const cpp::Int64 &inRHS)
 {
    HX_CHAR buf[100];
-   SPRINTF(buf,100,"%lld",inRHS);
+   SPRINTF(buf,100,"%lld", (long long int)inRHS);
    buf[99]='\0';
    __s = GCStringDup(buf,-1,&length);
 }
