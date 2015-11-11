@@ -115,7 +115,8 @@
 
 
  <flag value="-fomit-frame-pointer"/>
- <flag value="-fexceptions"/>
+ <flag value="-fexceptions" unless="HXCPP_NO_EXCEPTIONS" />
+ <flag value="-fno-exceptions" if="HXCPP_NO_EXCEPTIONS" />
  <flag value="-fno-strict-aliasing"/>
  <flag value="-finline-limit=10000"/>
  <flag value="-DANDROID=ANDROID"/>
