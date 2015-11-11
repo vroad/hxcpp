@@ -152,6 +152,7 @@
   <flag value="-Wl,--no-undefined" unless="dll_import" />
   <flag value="-Wl,--unresolved-symbols=ignore-in-object-files" if="dll_import" />
   <flag value="-Wl,-z,noexecstack"/>
+  <flag value="-Wl,--gc-sections" if="HXCPP_GC_SECTIONS" />
   <flag value="--sysroot=${ANDROID_NDK_ROOT}/platforms/${PLATFORM}/${PLATFORM_ARCH}"/>
   <flag value="-L${ANDROID_NDK_ROOT}/platforms/${PLATFORM}/${PLATFORM_ARCH}/usr/lib"/>
 
@@ -183,6 +184,7 @@
   <flag value="-Wl,--no-undefined" unless="dll_import" />
   <flag value="-Wl,--unresolved-symbols=ignore-in-object-files" if="dll_import" />
   <flag value="-Wl,-z,noexecstack"/>
+  <flag value="-Wl,--gc-sections" if="HXCPP_GC_SECTIONS" />
   <flag value="--sysroot=${ANDROID_NDK_ROOT}/platforms/${PLATFORM}/${PLATFORM_ARCH}"/>
   <flag value="-L${ANDROID_NDK_ROOT}/platforms/${PLATFORM}/${PLATFORM_ARCH}/usr/lib"/>
 
