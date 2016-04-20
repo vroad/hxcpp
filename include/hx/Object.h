@@ -6,7 +6,7 @@
 #endif
 
 #ifdef HXCPP_TELEMETRY
-extern void __hxt_gc_new(void* obj, int inSize);
+extern void __hxt_gc_new(void* obj, int inSize, const char *inName);
 #endif
 
 
@@ -26,10 +26,9 @@ enum hxObjectType
    vtFunction = 6,
    vtEnum,
    vtClass,
+   vtInt64,
    vtAbstractBase = 0x100,
 };
-
-
 
 
 namespace hx
@@ -113,7 +112,7 @@ public:
                                gMarkID;
 
                #ifdef HXCPP_TELEMETRY
-                  __hxt_gc_new(buffer, inSize);
+               __hxt_gc_new(buffer, inSize, inName);
                #endif
                return buffer;
             }
@@ -130,7 +129,7 @@ public:
 
 
       #ifdef HXCPP_TELEMETRY
-         __hxt_gc_new(result, inSize);
+         __hxt_gc_new(result, inSize, inName);
       #endif
       return result;
    }
@@ -154,7 +153,6 @@ public:
    virtual void __Visit(hx::VisitContext *__inCtx) { }
    #endif
    virtual bool __Is(hx::Object *inClass) const { return true; }
-   virtual hx::Object *__ToInterface(const hx::type_info &inInterface) { return 0; }
    virtual hx::Object *__GetRealObject() { return this; }
 
    // helpers...
@@ -170,14 +168,33 @@ public:
    virtual String __ToString() const;
 
    virtual int __ToInt() const { return 0; }
-   virtual double __ToDouble() const { return 0.0; }
+   virtual double __ToDouble() const { return __ToInt(); }
+   virtual cpp::Int64 __ToInt64() const { return (cpp::Int64)(__ToDouble()); }
    virtual const char * __CStr() const;
    virtual String toString();
    virtual bool __HasField(const String &inString);
-   virtual Dynamic __Field(const String &inString, hx::PropertyAccess inCallProp);
+   virtual hx::Val __Field(const String &inString, hx::PropertyAccess inCallProp);
+
+   #if (HXCPP_API_LEVEL >= 330)
+   // Non-virtual
+   Dynamic __IField(int inFieldID);
+   double __INumField(int inFieldID);
+
+   virtual void *_hx_getInterface(int inId);
+   #else
+   virtual hx::Object *__ToInterface(const hx::type_info &inInterface) { return 0; }
    virtual Dynamic __IField(int inFieldID);
    virtual double __INumField(int inFieldID);
-   virtual Dynamic __SetField(const String &inField,const Dynamic &inValue, hx::PropertyAccess inCallProp);
+
+   // These have been moved to EnumBase
+   virtual DynamicArray __EnumParams();
+   virtual String __Tag() const;
+   virtual int __Index() const;
+   virtual void __SetSize(int inLen) { }
+
+   #endif
+   virtual hx::Val __SetField(const String &inField,const hx::Val &inValue, hx::PropertyAccess inCallProp);
+
    virtual void  __SetThis(Dynamic inThis);
    virtual Dynamic __Run(const Array<Dynamic> &inArgs);
    virtual Dynamic *__GetFieldMap();
@@ -185,14 +202,11 @@ public:
    virtual hx::Class __GetClass() const;
 
    virtual int __Compare(const hx::Object *inRHS) const;
-   virtual DynamicArray __EnumParams();
-   virtual String __Tag() const;
-   virtual int __Index() const;
 
    virtual int __length() const { return 0; }
    virtual Dynamic __GetItem(int inIndex) const;
    virtual Dynamic __SetItem(int inIndex,Dynamic inValue);
-   virtual void __SetSize(int inLen) { }
+
 
    typedef const Dynamic &D;
    virtual Dynamic __run();
@@ -225,6 +239,7 @@ public:
 template<typename OBJ_>
 class ObjectPtr
 {
+protected:
    inline bool SetPtr(OBJ_ *inPtr)
    {
       mPtr = inPtr;
@@ -237,8 +252,10 @@ class ObjectPtr
       if (inPtr)
       {
          mPtr = dynamic_cast<OBJ_ *>(inPtr->__GetRealObject());
+         #if (HXCPP_API_LEVEL < 330)
          if (!mPtr)
             mPtr = (Ptr)inPtr->__ToInterface(typeid(Obj));
+         #endif
          if (inThrowOnInvalid && !mPtr)
             ::hx::BadCast();
       }
@@ -254,6 +271,8 @@ public:
    inline ObjectPtr(OBJ_ *inObj) : mPtr(inObj) { }
    inline ObjectPtr(const null &inNull) : mPtr(0) { }
    inline ObjectPtr(const ObjectPtr<OBJ_> &inOther) : mPtr( inOther.mPtr ) {  }
+   template<typename T>
+   inline ObjectPtr(const hx::Native<T> &inNative) : mPtr( dynamic_cast<T>(inNative.ptr) ) {  }
 
    template<typename SOURCE_>
    inline ObjectPtr(const ObjectPtr<SOURCE_> &inObjectPtr)
@@ -263,6 +282,18 @@ public:
          CastPtr(inObjectPtr.mPtr,true);
       #else
          CastPtr(inObjectPtr.mPtr,false);
+      #endif
+   }
+
+
+   inline ObjectPtr(const ::cpp::Variant &inVariant)
+   {
+      hx::Object *object = inVariant.asObject();
+      if (!SetPtr(object))
+      #ifdef HXCPP_STRICT_CASTS
+         CastPtr(object,true);
+      #else
+         CastPtr(object,false);
       #endif
    }
 
@@ -317,6 +348,9 @@ public:
       if (!mPtr || !inRHS.mPtr) return false;
       return !mPtr->__compare(inRHS.mPtr);
    }
+   inline bool operator==(const cpp::Variant &inRHS) const;
+   inline bool operator!=(const cpp::Variant &inRHS) const;
+
    template<typename T>
    inline bool operator!=(const T &inTRHS) const
    {
@@ -325,6 +359,9 @@ public:
       if (!mPtr || !inRHS.mPtr) return true;
       return mPtr->__compare(inRHS.mPtr);
    }
+
+   template<typename T>
+   operator hx::Native<T> () { return hx::Native<T>( mPtr ); }
 
    inline bool operator==(const null &inRHS) const { return mPtr==0; }
    inline bool operator!=(const null &inRHS) const { return mPtr!=0; }

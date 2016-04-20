@@ -37,11 +37,17 @@ HX_COMPARE_NULL_MOST_OPS(hx::IndexRef)
 // Operators for mixing various types ....
 
 
-inline String operator+(const Int &i,const String &s) { return String(i) + s; }
+inline String operator+(const cpp::UInt64 &i,const String &s) { return String(i) + s; }
+inline String operator+(const cpp::Int64 &i,const String &s) { return String(i) + s; }
+inline String operator+(const int &i,const String &s) { return String(i) + s; }
+inline String operator+(const unsigned int &i,const String &s) { return String(i) + s; }
 inline String operator+(const double &d,const String &s) { return String(d) + s; }
 inline String operator+(const float &d,const String &s) { return String(d) + s; }
 inline String operator+(const bool &b,const String &s) { return String(b) + s; }
-inline String operator+(const HX_CHAR *c,const String &s) { return String(c) + s; }
+inline String operator+(const unsigned char c,const String &s) { return String(c) + s; }
+inline String operator+(const signed char c,const String &s) { return String(c) + s; }
+inline String operator+(const unsigned short c,const String &s) { return String(c) + s; }
+inline String operator+(const signed short c,const String &s) { return String(c) + s; }
 inline String operator+(const null &n,const String &s) { return String(n) + s; }
 inline String operator+(const cpp::CppInt32__ &i,const String &s) { return String(i) + s; }
 
@@ -74,6 +80,8 @@ template<> inline double ToDouble(double inValue) { return inValue; }
 template<> inline double ToDouble(int inValue) { return inValue; }
 template<> inline double ToDouble(bool inValue) { return inValue; }
 template<> inline double ToDouble(float inValue) { return inValue; }
+template<> inline double ToDouble(cpp::UInt64 inValue) { return inValue; }
+template<> inline double ToDouble(cpp::Int64 inValue) { return inValue; }
 template<> inline double ToDouble(null inValue) { return 0; }
 
 
@@ -88,6 +96,8 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES double DoubleMod(double inLHS,double inRHS);
 
 template<typename TL,typename TR>
 double Mod(TL inLHS,TR inRHS) { return hx::DoubleMod(inLHS,inRHS); }
+
+double DivByZero(double d);
 
 #if !defined(_MSC_VER) || _MSC_VER > 1399
 inline int Mod(int inLHS,int inRHS) { return inLHS % inRHS; }
@@ -117,7 +127,7 @@ inline L& UShrEq(L &inLHS, R inRHS) { inLHS = hx::UShr(inLHS,inRHS); return inLH
 template<typename L, typename R>
 inline L& ModEq(L &inLHS, R inRHS) { inLHS = DoubleMod(inLHS,inRHS); return inLHS; }
 
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__SNC__)
 template<typename R>
 inline hx::FieldRef AddEq(hx::FieldRef inLHS, R inRHS) { inLHS = inLHS + inRHS; return inLHS; }
 template<typename R>
@@ -166,7 +176,7 @@ template<typename R>
 inline hx::IndexRef ModEq(hx::IndexRef inLHS, R inRHS) { inLHS = DoubleMod(inLHS,inRHS); return inLHS; }
 
 
-#endif // __GNUC__
+#endif // __GNUC__ || __SNC__
 
 
 template<typename T> inline T TCastObject(hx::Object *inObj) { return hx::BadCast(); }
@@ -243,6 +253,23 @@ template<typename T> struct TCast< ObjectPtr<T> >
    }
 };
 
+#if (HXCPP_API_LEVEL >= 330)
+template< > struct TCast< cpp::VirtualArray >
+{
+   template<typename VAL> static inline cpp::VirtualArray cast(VAL inVal ) {
+      return  cpp::VirtualArray(inVal);
+   }
+};
+#endif
+
+
+// Cast to struct
+template<typename T,typename H> struct TCast< cpp::Struct<T,H> >
+{
+   static inline cpp::Struct<T,H> cast( const cpp::Struct<T,H> &inObj ) { return inObj; }
+};
+
+
 inline Array<Dynamic> TCastToArray(Dynamic inVal)
 {
    Dynamic result = inVal;
@@ -270,14 +297,16 @@ template<> struct DynamicConvertType< Array_obj<char> * > { enum { Convert = siz
 template<> struct DynamicConvertType< Array_obj< ::String> * > { enum { Convert = DynamicConvertStringPodId }; };
 }
 
+
+
 template<typename RESULT>
 inline RESULT Dynamic::StaticCast() const
 {
    typedef typename RESULT::Ptr type;
 
-   if ( (hx::DynamicConvertType<type>::Convert<0) ||
-       (hx::DynamicConvertType<type>::Convert > 0 && mPtr && 
-          hx::DynamicConvertType<type>::Convert != ((hx::ArrayBase *)mPtr)->getPodSize()) )
+   if ( ((int)hx::DynamicConvertType<type>::Convert<0) ||
+       ((int)hx::DynamicConvertType<type>::Convert > 0 && mPtr && 
+          (int)hx::DynamicConvertType<type>::Convert != ((hx::ArrayBase *)mPtr)->getPodSize()) )
    {
       // Constructing the result from the Dynamic value will check for a conversion
       //  using something like dynamic_cast

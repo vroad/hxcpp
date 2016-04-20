@@ -32,6 +32,14 @@ inline hx::Class &ClassOf<null>() { return GetVoidClass(); }
 template<> 
 inline hx::Class &ClassOf<String>() { return GetStringClass(); }
 
+
+template<typename T>
+struct hxBaseType { typedef T type; };
+template<typename T>
+struct hxBaseType< hx::ObjectPtr<T> > { typedef T type; };
+
+template<typename T> inline int ClassSizeOf() { return sizeof( typename hx::hxBaseType<T>::type ); }
+
 } // end namespace hx
 
 
@@ -121,9 +129,9 @@ public:
    static hx::Class      & __SGetClass();
 	static void       __boot();
 
-   Dynamic __Field(const String &inString ,hx::PropertyAccess inCallProp);
+   hx::Val __Field(const String &inString ,hx::PropertyAccess inCallProp);
 
-   Dynamic __SetField(const String &inString,const Dynamic &inValue ,hx::PropertyAccess inCallProp);
+   hx::Val __SetField(const String &inString,const hx::Val &inValue ,hx::PropertyAccess inCallProp);
 
    bool __HasField(const String &inString);
 
@@ -214,8 +222,33 @@ void RegisterClass(const String &inClassName, hx::Class inClass);
 template<typename T>
 inline bool TCanCast(hx::Object *inPtr)
 {
-	return inPtr && ( dynamic_cast<T *>(inPtr->__GetRealObject()) || inPtr->__ToInterface(typeid(T)) );
+	return inPtr && ( dynamic_cast<T *>(inPtr->__GetRealObject())
+                  #if (HXCPP_API_LEVEL < 330)
+                  || inPtr->__ToInterface(typeid(T))
+                  #endif
+                  );
 }
+
+
+#if (HXCPP_API_LEVEL >= 330)
+template<int HASH>
+inline bool TIsInterface(hx::Object *inPtr)
+{
+	return inPtr && inPtr->__GetRealObject()->_hx_getInterface(HASH);
+}
+#endif
+
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES void RegisterVTableOffset(int inOffset);
+
+#define HX_REGISTER_VTABLE_OFFSET( CLASS, INTERFACE ) \
+{ \
+   CLASS *dummy = (CLASS *)0; \
+   INTERFACE *intf = dummy; \
+   hx::RegisterVTableOffset( (int)( (size_t)((char *)intf - (char *)dummy)) ); \
+}
+
+
 
 }
 

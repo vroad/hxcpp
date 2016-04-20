@@ -33,7 +33,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_collect(bool inMajor=true);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void   __hxcpp_gc_compact();
 HXCPP_EXTERN_CLASS_ATTRIBUTES int   __hxcpp_gc_trace(hx::Class inClass, bool inPrint);
 HXCPP_EXTERN_CLASS_ATTRIBUTES int   __hxcpp_gc_used_bytes();
-HXCPP_EXTERN_CLASS_ATTRIBUTES int   __hxcpp_gc_mem_info(int inWhat);
+HXCPP_EXTERN_CLASS_ATTRIBUTES double __hxcpp_gc_mem_info(int inWhat);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_enter_gc_free_zone();
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_exit_gc_free_zone();
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_gc_safe_point();
@@ -41,9 +41,14 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_spam_collects(int inEveryNCalls);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_set_minimum_working_memory(int inBytes);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_set_minimum_free_space(int inBytes);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_set_target_free_space_percentage(int inPercentage);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool __hxcpp_is_const_string(const ::String &inString);
 
 // Finalizers from haxe code...
 void  __hxcpp_gc_do_not_kill(Dynamic inObj);
+
+// This is the correctly typed version - no change of getting function proto wrong
+void _hx_set_finalizer(Dynamic inObj, void (*inFunc)(Dynamic) );
+
 void  __hxcpp_set_finalizer(Dynamic inObj, void *inFunction);
 hx::Object *__hxcpp_get_next_zombie();
 
@@ -173,6 +178,18 @@ void GCChangeManagedMemory(int inDelta, const char *inWhy=0);
 void EnterGCFreeZone();
 void ExitGCFreeZone();
 
+class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoGCFreeZone
+{
+public:
+	AutoGCFreeZone() : locked(true) { EnterGCFreeZone(); }
+	~AutoGCFreeZone() { if (locked) ExitGCFreeZone(); }
+
+	void close() { if (locked) ExitGCFreeZone(); locked = false; }
+
+	bool locked;
+};
+
+
 // Defined in Class.cpp, these function is called from the Gc to start the marking/visiting
 void MarkClassStatics(hx::MarkContext *__inCtx);
 #ifdef HXCPP_VISIT_ALLOCS
@@ -246,6 +263,7 @@ class ImmixAllocator
 public:
    virtual ~ImmixAllocator() {}
    virtual void *CallAlloc(int inSize,unsigned int inObjectFlags) = 0;
+   virtual void SetupStack() = 0;
 
    int            spaceStart;
    int            spaceEnd;
@@ -280,13 +298,13 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void MarkObjectAllocUnchecked(hx::Object *inPtr ,h
 inline void MarkAlloc(void *inPtr ,hx::MarkContext *__inCtx)
 {
    // This will also skip const regions
-   if ( ((unsigned int *)inPtr)[-1] & hx::gPrevMarkIdMask )
+   if ( !(((unsigned int *)inPtr)[-1] & hx::gPrevMarkIdMask) )
       MarkAllocUnchecked(inPtr,__inCtx);
 }
 inline void MarkObjectAlloc(hx::Object *inPtr ,hx::MarkContext *__inCtx)
 {
    // This will also skip const regions
-   if ( ((unsigned int *)inPtr)[-1] & hx::gPrevMarkIdMask )
+   if ( !(((unsigned int *)inPtr)[-1] & hx::gPrevMarkIdMask) )
       MarkObjectAllocUnchecked(inPtr,__inCtx);
 }
 

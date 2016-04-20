@@ -15,8 +15,8 @@
 
 #define HX_DO_RTTI \
    HX_DO_RTTI_ALL \
-    ::NS::Dynamic __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
-    ::NS::Dynamic __SetField(const ::String &inString,const  ::NS::Dynamic &inValue, hx::PropertyAccess inCallProp); \
+    ::NS::hx::NS::Val __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
+    ::NS::hx::NS::Val __SetField(const ::String &inString,const  ::NS::hx::NS::Val &inValue, hx::PropertyAccess inCallProp); \
    void __GetFields(Array< ::String> &outFields);
 
 #define HX_DO_INTERFACE_RTTI \
@@ -26,7 +26,7 @@
 
 #define HX_DO_ENUM_RTTI_INTERNAL \
    HX_DO_RTTI_BASE  \
-    ::NS::Dynamic __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
+    ::NS::hx::NS::Val __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
    static int __FindIndex(::String inName); \
    static int __FindArgCount(::String inName);
 
@@ -84,7 +84,7 @@
 }; \
  ::NS::Dynamic class::func##_dyn() \
 {\
-   return hx::NS::CreateMemberFunction0(this,__##class##func); \
+   return hx::NS::CreateMemberFunction0(#func,this,__##class##func); \
 }
 
 
@@ -95,7 +95,7 @@
 }; \
  ::NS::Dynamic class::func##_dyn() \
 {\
-   return hx::NS::CreateMemberFunction##N(this,__##class##func); \
+   return hx::NS::CreateMemberFunction##N(#func,this,__##class##func); \
 }
 
 
@@ -106,7 +106,7 @@
 }; \
  ::NS::Dynamic class::func##_dyn() \
 {\
-   return hx::NS::CreateMemberFunctionVar(this,__##class##func,N); \
+   return hx::NS::CreateMemberFunctionVar(#func,this,__##class##func,N); \
 }
 
 
@@ -145,7 +145,7 @@
 }; \
  ::NS::Dynamic class::func##_dyn() \
 {\
-   return hx::NS::CreateStaticFunction0(__##class##func); \
+   return hx::NS::CreateStaticFunction0(#func,__##class##func); \
 }
 
 
@@ -156,7 +156,7 @@
 }; \
  ::NS::Dynamic class::func##_dyn() \
 {\
-   return hx::NS::CreateStaticFunction##N(__##class##func); \
+   return hx::NS::CreateStaticFunction##N(#func,__##class##func); \
 }
 
 
@@ -167,7 +167,7 @@
 }; \
  ::NS::Dynamic class::func##_dyn() \
 {\
-   return hx::NS::CreateStaticFunctionVar(__##class##func,N); \
+   return hx::NS::CreateStaticFunctionVar(#func,__##class##func,N); \
 }
 
 
@@ -182,6 +182,23 @@
 ::end::
 ::end::::end::
 
+#if (HXCPP_API_LEVEL >= 330)
+
+#define HX_DEFINE_CREATE_ENUM(enum_obj) \
+static  ::NS::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
+{ \
+   int count =  enum_obj::__FindArgCount(inName); \
+   int args = inArgs.GetPtr() ? inArgs.__length() : 0; \
+   if (args!=count) __hxcpp_dbg_checkedThrow(HX_INVALID_ENUM_ARG_COUNT(#enum_obj, inName, count, args)); \
+   ::NS::Dynamic result; \
+   if (!enum_obj::NS::__GetStatic(inName,result,hx::paccDynamic)) __hxcpp_dbg_checkedThrow(HX_INVALID_ENUM_CONSTRUCTOR(#enum_obj, inName)); \
+   if (args==0) return result; \
+   return result->__Run(inArgs); \
+}
+
+
+#else
+
 #define HX_DEFINE_CREATE_ENUM(enum_obj) \
 static  ::NS::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
 { \
@@ -190,9 +207,12 @@ static  ::NS::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) 
    int count =  enum_obj::__FindArgCount(inName); \
    int args = inArgs.GetPtr() ? inArgs.__length() : 0; \
    if (args!=count) __hxcpp_dbg_checkedThrow(HX_INVALID_ENUM_ARG_COUNT(#enum_obj, inName, count, args)); \
-   if (args==0) {  ::NS::Dynamic result =(new enum_obj())->__Field(inName,HX_PROP_DYNAMIC); if (result!=null()) return result; } \
-   return hx::CreateEnum<enum_obj >(inName,idx,inArgs); \
+   ::NS::Dynamic result =(new enum_obj())->__Field(inName,HX_PROP_DYNAMIC); \
+   if (args==0 || !result.mPtr) return result; \
+   return result->__Run(inArgs); \
 }
+
+#endif
 
 
 #define HX_DECLARE_CLASS0(klass) \
@@ -230,6 +250,8 @@ static  ::NS::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) 
 #define HX_END_DEFAULT_FUNC \
 }
 
+#define HXARGC(x) int __ArgCount() const { return x; }
+
 #define HX_BEGIN_LOCAL_FUNC_S0(SUPER,name) \
    struct name : public SUPER { \
    void __Mark(hx::MarkContext *__inCtx) { DoMarkThis(__inCtx); } \
@@ -244,10 +266,15 @@ static  ::NS::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) 
    void __Visit(hx::VisitContext *__inCtx) { DoVisitThis(__inCtx); ::VISITS:: } \
    name(::CONSTRUCT_ARGS::) : ::CONSTRUCT_VARS:: {}::end::
 
+#if (HXCPP_API_LEVEL>=330)
+  #define HX_LOCAL_RUN _hx_run
+#else
+  #define HX_LOCAL_RUN run
+#endif
 
-#define HX_END_LOCAL_FUNC0(ret) HX_DYNAMIC_CALL0(ret,run) };
+#define HX_END_LOCAL_FUNC0(ret) HX_DYNAMIC_CALL0(ret, HX_LOCAL_RUN ) };
 ::foreach LOCALS::
-#define HX_END_LOCAL_FUNC::ARG::(ret) HX_DYNAMIC_CALL::ARG::(ret,run) };::end::
+#define HX_END_LOCAL_FUNC::ARG::(ret) HX_DYNAMIC_CALL::ARG::(ret, HX_LOCAL_RUN ) };::end::
 
 // For compatibility until next version of haxe is released
 #define HX_BEGIN_LOCAL_FUNC0(name) \
@@ -261,6 +288,18 @@ static  ::NS::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) 
 ::foreach PARAMS:: ::if (ARG<6):: inline  ::NS::Dynamic operator()(::DYNAMIC_ARG_LIST::) { CheckFPtr(); return mPtr->__run(::ARG_LIST::); } \
 ::else::  ::NS::Dynamic operator()(::DYNAMIC_ARG_LIST::); \
 ::end:: ::end::
+
+
+#define HX_DECLARE_VARIANT_FUNCTIONS \
+::foreach PARAMS:: ::if (ARG<6):: inline  ::NS::Dynamic operator()(::DYNAMIC_ARG_LIST::); \
+::else::  ::NS::Dynamic operator()(::DYNAMIC_ARG_LIST::); \
+::end:: ::end::
+
+
+#define HX_IMPLEMNET_INLINE_VARIANT_FUNCTIONS \
+::foreach PARAMS:: ::if (ARG<6):: ::NS::Dynamic Variant::NS::operator()(::DYNAMIC_ARG_LIST::) { CheckFPtr(); return valObject->__run(::ARG_LIST::); } \
+::end:: ::end::
+
 
 
 

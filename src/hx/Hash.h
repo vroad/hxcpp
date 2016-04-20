@@ -174,6 +174,7 @@ struct HashBase : public Object
    virtual Dynamic values() = 0;
 
    virtual void updateAfterGc() = 0;
+   virtual ::String toStringRaw() { return toString(); }
 };
 
 extern void RegisterWeakHash(HashBase<Dynamic> *);
@@ -438,21 +439,6 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
 
    template<typename F>
-   void iterateAddr(F &inFunc)
-   {
-      for(int b=0;b<bucketCount;b++)
-      {
-         Element **el = &bucket[b];
-         while(*el)
-         {
-            inFunc(el);
-            el = &(*el)->next;
-         }
-      }
-   }
-
-
-   template<typename F>
    void iterate(F &inFunc)
    {
       for(int b=0;b<bucketCount;b++)
@@ -545,11 +531,14 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    struct StringBuilder
    {
       Array<String> array;
+      bool raw;
 
-      StringBuilder(int inReserve = 0)
+      StringBuilder(int inReserve = 0,bool inRaw=false)
       {
+         raw = inRaw;
          array = Array<String>(0,inReserve*4+1);
-         array->push(HX_CSTRING("{ "));
+         if (!raw)
+            array->push(HX_CSTRING("{ "));
       }
       void operator()(typename Hash::Element *elem)
       {
@@ -561,14 +550,23 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       }
       ::String toString()
       {
-         array->push(HX_CSTRING("}"));
-         return array->join(HX_CSTRING(""));
+         if (!raw)
+            array->push(HX_CSTRING(" }"));
+         return array->length==0 ? String() : array->join(HX_CSTRING(""));
       }
    };
 
    String toString()
    {
       StringBuilder builder(getSize());
+      iterate(builder);
+      return builder.toString();
+   }
+
+
+   String toStringRaw()
+   {
+      StringBuilder builder(getSize(),true);
       iterate(builder);
       return builder.toString();
    }
@@ -599,33 +597,28 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    }
 
 #ifdef HXCPP_VISIT_ALLOCS
-   // Vist ...
-   struct HashVisitor
-   {
-      hx::VisitContext *__inCtx;
-      HashVisitor(hx::VisitContext *ctx) : __inCtx(ctx) { }
-      void operator()(typename Hash::Element **inElem)
-      {
-         HX_VISIT_ARRAY(*inElem);
-         if ( (NeedsMarking<Key>::Yes && !ELEMENT::WeakKeys) || NeedsMarking<Value>::Yes)
-         {
-             typename Hash::Element &el = **inElem;
-             HX_VISIT_MEMBER(el.key);
-             HX_VISIT_MEMBER(el.value);
-         }
-      }
-   };
 
    void __Visit(hx::VisitContext *__inCtx)
    {
+      //printf(" visit hash %p\n", this);
       HX_VISIT_ARRAY(bucket);
-      HashVisitor vistor(__inCtx);
-      iterateAddr(vistor);
+      for(int b=0;b<bucketCount;b++)
+      {
+         HX_VISIT_ARRAY(bucket[b]);
+         Element *el = bucket[b];
+         while(el)
+         {
+            HX_VISIT_MEMBER(el->key);
+            HX_VISIT_MEMBER(el->value);
+            HX_VISIT_ARRAY(el->next);
+            el = el->next;
+         }
+      }
    }
 #endif
 };
 
-
+#if 0
 template<typename ELEMENT>
 struct TinyHash : public HashBase< typename ELEMENT::Key >
 {
@@ -852,6 +845,7 @@ struct TinyHash : public HashBase< typename ELEMENT::Key >
    }
 #endif
 };
+#endif
 
 } // end namespace hx
 

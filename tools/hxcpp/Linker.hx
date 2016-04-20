@@ -13,15 +13,18 @@ class Linker
    public var mLibDir:String;
    public var mRanLib:String;
    public var mFromFile:String;
+   public var mFromFileNeedsQuotes:Bool;
    public var mLibs:Array<String>;
    public var mExpandArchives:Bool;
    public var mRecreate:Bool;
    public var mLastOutName:String;
+   public var mAddLibPath:String;
 
    public function new(inExe:String)
    {
       mFlags = [];
       mOutFlag = "-o";
+      mAddLibPath = "-L";
       mExe = inExe;
       mNamePrefix = "";
       mLibDir = "";
@@ -29,6 +32,7 @@ class Linker
       mExpandArchives = false;
       // Default to on...
       mFromFile = "@";
+      mFromFileNeedsQuotes = true;
       mLibs = [];
       mRecreate = false;
    }
@@ -184,7 +188,7 @@ class Linker
                   var libObjs = ProcessManager.readStdout(mExe, ["t", lib ]);
                   var objDir = inCompiler.mObjDir + "/" + libName + ".unpack";
                   PathManager.mkdir(objDir);
-                  ProcessManager.runCommand (objDir, mExe, ["x", lib]);
+                  ProcessManager.runCommand (objDir, mExe, ["x", lib], true, true, false, " - Unpack : " + lib);
                   for(obj in libObjs)
                      objs.push( objDir+"/"+obj );
                }
@@ -204,22 +208,42 @@ class Linker
          }
 
          // Place list of obj files in a file called "all_objs"
-         if (mFromFile=="@")
+         if (mFromFile!="")
          {
             PathManager.mkdir(inCompiler.mObjDir);
             var fname = inCompiler.mObjDir + "/all_objs";
             var fout = sys.io.File.write(fname,false);
-            for(obj in objs)
-               fout.writeString('"' + obj + '"\n');
+            if (mFromFileNeedsQuotes)
+            {
+               for(obj in objs)
+                  fout.writeString('"' + obj + '"\n');
+            }
+            else
+            {
+               for(obj in objs)
+                  fout.writeString(obj + '\n');
+            }
             fout.close();
-            args.push("@" + fname );
+            var parts = mFromFile.split(" ");
+            var last = parts.pop();
+            args = args.concat(parts);
+            args.push(last + fname );
          }
          else
             args = args.concat(objs);
 
+         for(libpath in inTarget.mLibPaths)
+         {
+            var path = Path.normalize(libpath);
+            if (path.startsWith(here))
+               path = path.substr(hereLen);
+            args.push( mAddLibPath + path );
+         }
+
          args = args.concat(libs);
          
-         var result = ProcessManager.runCommand("", mExe, args);
+         var result = ProcessManager.runCommand("", mExe, args, true, true, false,
+             " - Link : " + out_name);
          if (result!=0)
          {
             Sys.exit(result);
@@ -229,7 +253,7 @@ class Linker
          if (mRanLib!="")
          {
             args = [out_name];
-            var result = ProcessManager.runCommand("", mRanLib, args);
+            var result = ProcessManager.runCommand("", mRanLib, args, true, true, false, " - Ranlib : " + out_name);
             if (result!=0)
             {
                Sys.exit(result);

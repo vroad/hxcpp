@@ -245,7 +245,15 @@ typedef hx::Object * (*ScriptableClassFactory)(void **inVTable,int inDataSize);
 typedef hx::Object * (*ScriptableInterfaceFactory)(void **inVTable,::hx::Object *);
 
 void ScriptableRegisterClass( String inName, int inBaseSize, ScriptNamedFunction *inFunctions, ScriptableClassFactory inFactory, ScriptFunction inConstruct);
+
+
+#if (HXCPP_API_LEVEL >= 330)
+void ScriptableRegisterInterface( String inName, ScriptNamedFunction *inFunctions, void *inInterfacePointers);
+void ScriptableRegisterNameSlots(const char *inNames[], int inLength);
+
+#else
 void ScriptableRegisterInterface( String inName, ScriptNamedFunction *inFunctions,const hx::type_info *inType, ScriptableInterfaceFactory inFactory);
+#endif
 
 ::String ScriptableToString(void *);
 hx::Class ScriptableGetClass(void *);
@@ -259,19 +267,28 @@ void ScriptableGetFields(hx::Object *inObject, Array< ::String> &outFields);
 bool ScriptableSetField(hx::Object *, const ::String &, Dynamic inValue,hx::PropertyAccess inCallProp, Dynamic &outValue);
 
 
-}
+} // End namespace hx
 
 void __scriptable_load_neko(String inName);
 void __scriptable_load_cppia(String inCode);
 void __scriptable_load_neko_bytes(Array<unsigned char> inBytes);
 void __scriptable_load_abc(Array<unsigned char> inBytes);
 
+#if (HXCPP_API_LEVEL >= 330)
+
+#define HX_SCRIPTABLE_REGISTER_INTERFACE(name,class) \
+    hx::ScriptableRegisterInterface( HX_CSTRING(name), __scriptableFunctions, & class##_scriptable )
+
+#else
 
 #define HX_SCRIPTABLE_REGISTER_INTERFACE(name,class) \
     hx::ScriptableRegisterInterface( HX_CSTRING(name), __scriptableFunctions, &typeid(class), class##__scriptable::__script_create )
 
+#endif
+
 #define HX_SCRIPTABLE_REGISTER_CLASS(name,class) \
    hx::ScriptableRegisterClass( HX_CSTRING(name), (int)sizeof(class##__scriptable), __scriptableFunctions, class##__scriptable::__script_create, class##__scriptable::__script_construct )
+
 
 
 #define HX_DEFINE_SCRIPTABLE(ARG_LIST) \
@@ -327,13 +344,13 @@ void __Visit(HX_VISIT_PARAMS) { super::__Visit(HX_VISIT_ARG); hx::ScriptableVisi
 	void __Mark(HX_MARK_PARAMS) { super::__Mark(HX_MARK_ARG); hx::ScriptableMark(__scriptVTable[-1],this,HX_MARK_ARG); } \
    SCRIPTABLE_DYNAMIC_VISIT_FUNCTION \
  \
-	Dynamic __Field(const ::String &inName,hx::PropertyAccess inCallProp) \
+	hx::Val __Field(const ::String &inName,hx::PropertyAccess inCallProp) \
       { Dynamic result; if (hx::ScriptableField(this,inName,inCallProp,result)) return result; return super::__Field(inName,inCallProp); } \
 	Float __INumField(int inFieldID) \
 		{ Float result; if (hx::ScriptableField(this,inFieldID,hx::paccAlways,result)) return result; return super::__INumField(inFieldID); } \
 	Dynamic __IField(int inFieldID) \
 		{ Dynamic result; if (hx::ScriptableField(this,inFieldID,hx::paccAlways,result)) return result; return super::__IField(inFieldID); } \
-	Dynamic __SetField(const ::String &inName,const Dynamic &inValue,hx::PropertyAccess inCallProp) \
+   hx::Val __SetField(const ::String &inName,const hx::Val &inValue,hx::PropertyAccess inCallProp) \
    { \
       Dynamic value; \
       if (hx::ScriptableSetField(this, inName, inValue,inCallProp,value)) \

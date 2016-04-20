@@ -23,8 +23,8 @@
 
 #define HX_DO_RTTI \
    HX_DO_RTTI_ALL \
-    ::Dynamic __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
-    ::Dynamic __SetField(const ::String &inString,const  ::Dynamic &inValue, hx::PropertyAccess inCallProp); \
+    ::hx::Val __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
+    ::hx::Val __SetField(const ::String &inString,const  ::hx::Val &inValue, hx::PropertyAccess inCallProp); \
    void __GetFields(Array< ::String> &outFields);
 
 #define HX_DO_INTERFACE_RTTI \
@@ -34,7 +34,7 @@
 
 #define HX_DO_ENUM_RTTI_INTERNAL \
    HX_DO_RTTI_BASE  \
-    ::Dynamic __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
+    ::hx::Val __Field(const ::String &inString, hx::PropertyAccess inCallProp); \
    static int __FindIndex(::String inName); \
    static int __FindArgCount(::String inName);
 
@@ -170,7 +170,7 @@
 }; \
  ::Dynamic class::func##_dyn() \
 {\
-   return hx::CreateMemberFunction0(this,__##class##func); \
+   return hx::CreateMemberFunction0(#func,this,__##class##func); \
 }
 
 
@@ -181,7 +181,7 @@
 }; \
  ::Dynamic class::func##_dyn() \
 {\
-   return hx::CreateMemberFunction##N(this,__##class##func); \
+   return hx::CreateMemberFunction##N(#func,this,__##class##func); \
 }
 
 
@@ -192,7 +192,7 @@
 }; \
  ::Dynamic class::func##_dyn() \
 {\
-   return hx::CreateMemberFunctionVar(this,__##class##func,N); \
+   return hx::CreateMemberFunctionVar(#func,this,__##class##func,N); \
 }
 
 
@@ -354,7 +354,7 @@
 }; \
  ::Dynamic class::func##_dyn() \
 {\
-   return hx::CreateStaticFunction0(__##class##func); \
+   return hx::CreateStaticFunction0(#func,__##class##func); \
 }
 
 
@@ -365,7 +365,7 @@
 }; \
  ::Dynamic class::func##_dyn() \
 {\
-   return hx::CreateStaticFunction##N(__##class##func); \
+   return hx::CreateStaticFunction##N(#func,__##class##func); \
 }
 
 
@@ -376,7 +376,7 @@
 }; \
  ::Dynamic class::func##_dyn() \
 {\
-   return hx::CreateStaticFunctionVar(__##class##func,N); \
+   return hx::CreateStaticFunctionVar(#func,__##class##func,N); \
 }
 
 
@@ -514,6 +514,23 @@
 
 
 
+#if (HXCPP_API_LEVEL >= 330)
+
+#define HX_DEFINE_CREATE_ENUM(enum_obj) \
+static  ::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
+{ \
+   int count =  enum_obj::__FindArgCount(inName); \
+   int args = inArgs.GetPtr() ? inArgs.__length() : 0; \
+   if (args!=count) __hxcpp_dbg_checkedThrow(HX_INVALID_ENUM_ARG_COUNT(#enum_obj, inName, count, args)); \
+   ::Dynamic result; \
+   if (!enum_obj::__GetStatic(inName,result,hx::paccDynamic)) __hxcpp_dbg_checkedThrow(HX_INVALID_ENUM_CONSTRUCTOR(#enum_obj, inName)); \
+   if (args==0) return result; \
+   return result->__Run(inArgs); \
+}
+
+
+#else
+
 #define HX_DEFINE_CREATE_ENUM(enum_obj) \
 static  ::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
 { \
@@ -522,9 +539,12 @@ static  ::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
    int count =  enum_obj::__FindArgCount(inName); \
    int args = inArgs.GetPtr() ? inArgs.__length() : 0; \
    if (args!=count) __hxcpp_dbg_checkedThrow(HX_INVALID_ENUM_ARG_COUNT(#enum_obj, inName, count, args)); \
-   if (args==0) {  ::Dynamic result =(new enum_obj())->__Field(inName,HX_PROP_DYNAMIC); if (result!=null()) return result; } \
-   return hx::CreateEnum<enum_obj >(inName,idx,inArgs); \
+   ::Dynamic result =(new enum_obj())->__Field(inName,HX_PROP_DYNAMIC); \
+   if (args==0 || !result.mPtr) return result; \
+   return result->__Run(inArgs); \
 }
+
+#endif
 
 
 #define HX_DECLARE_CLASS0(klass) \
@@ -587,6 +607,8 @@ static  ::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
 
 #define HX_END_DEFAULT_FUNC \
 }
+
+#define HXARGC(x) int __ArgCount() const { return x; }
 
 #define HX_BEGIN_LOCAL_FUNC_S0(SUPER,name) \
    struct name : public SUPER { \
@@ -710,28 +732,33 @@ static  ::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
    void __Visit(hx::VisitContext *__inCtx) { DoVisitThis(__inCtx); HX_VISIT_MEMBER(v0); HX_VISIT_MEMBER(v1); HX_VISIT_MEMBER(v2); HX_VISIT_MEMBER(v3); HX_VISIT_MEMBER(v4); HX_VISIT_MEMBER(v5); HX_VISIT_MEMBER(v6); HX_VISIT_MEMBER(v7); HX_VISIT_MEMBER(v8); HX_VISIT_MEMBER(v9); HX_VISIT_MEMBER(v10); HX_VISIT_MEMBER(v11); HX_VISIT_MEMBER(v12); HX_VISIT_MEMBER(v13); HX_VISIT_MEMBER(v14); HX_VISIT_MEMBER(v15); HX_VISIT_MEMBER(v16); HX_VISIT_MEMBER(v17); HX_VISIT_MEMBER(v18); } \
    name(t0 __0,t1 __1,t2 __2,t3 __3,t4 __4,t5 __5,t6 __6,t7 __7,t8 __8,t9 __9,t10 __10,t11 __11,t12 __12,t13 __13,t14 __14,t15 __15,t16 __16,t17 __17,t18 __18) : v0(__0),v1(__1),v2(__2),v3(__3),v4(__4),v5(__5),v6(__6),v7(__7),v8(__8),v9(__9),v10(__10),v11(__11),v12(__12),v13(__13),v14(__14),v15(__15),v16(__16),v17(__17),v18(__18) {}
 
+#if (HXCPP_API_LEVEL>=330)
+  #define HX_LOCAL_RUN _hx_run
+#else
+  #define HX_LOCAL_RUN run
+#endif
 
-#define HX_END_LOCAL_FUNC0(ret) HX_DYNAMIC_CALL0(ret,run) };
+#define HX_END_LOCAL_FUNC0(ret) HX_DYNAMIC_CALL0(ret, HX_LOCAL_RUN ) };
 
-#define HX_END_LOCAL_FUNC1(ret) HX_DYNAMIC_CALL1(ret,run) };
-#define HX_END_LOCAL_FUNC2(ret) HX_DYNAMIC_CALL2(ret,run) };
-#define HX_END_LOCAL_FUNC3(ret) HX_DYNAMIC_CALL3(ret,run) };
-#define HX_END_LOCAL_FUNC4(ret) HX_DYNAMIC_CALL4(ret,run) };
-#define HX_END_LOCAL_FUNC5(ret) HX_DYNAMIC_CALL5(ret,run) };
-#define HX_END_LOCAL_FUNC6(ret) HX_DYNAMIC_CALL6(ret,run) };
-#define HX_END_LOCAL_FUNC7(ret) HX_DYNAMIC_CALL7(ret,run) };
-#define HX_END_LOCAL_FUNC8(ret) HX_DYNAMIC_CALL8(ret,run) };
-#define HX_END_LOCAL_FUNC9(ret) HX_DYNAMIC_CALL9(ret,run) };
-#define HX_END_LOCAL_FUNC10(ret) HX_DYNAMIC_CALL10(ret,run) };
-#define HX_END_LOCAL_FUNC11(ret) HX_DYNAMIC_CALL11(ret,run) };
-#define HX_END_LOCAL_FUNC12(ret) HX_DYNAMIC_CALL12(ret,run) };
-#define HX_END_LOCAL_FUNC13(ret) HX_DYNAMIC_CALL13(ret,run) };
-#define HX_END_LOCAL_FUNC14(ret) HX_DYNAMIC_CALL14(ret,run) };
-#define HX_END_LOCAL_FUNC15(ret) HX_DYNAMIC_CALL15(ret,run) };
-#define HX_END_LOCAL_FUNC16(ret) HX_DYNAMIC_CALL16(ret,run) };
-#define HX_END_LOCAL_FUNC17(ret) HX_DYNAMIC_CALL17(ret,run) };
-#define HX_END_LOCAL_FUNC18(ret) HX_DYNAMIC_CALL18(ret,run) };
-#define HX_END_LOCAL_FUNC19(ret) HX_DYNAMIC_CALL19(ret,run) };
+#define HX_END_LOCAL_FUNC1(ret) HX_DYNAMIC_CALL1(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC2(ret) HX_DYNAMIC_CALL2(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC3(ret) HX_DYNAMIC_CALL3(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC4(ret) HX_DYNAMIC_CALL4(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC5(ret) HX_DYNAMIC_CALL5(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC6(ret) HX_DYNAMIC_CALL6(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC7(ret) HX_DYNAMIC_CALL7(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC8(ret) HX_DYNAMIC_CALL8(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC9(ret) HX_DYNAMIC_CALL9(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC10(ret) HX_DYNAMIC_CALL10(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC11(ret) HX_DYNAMIC_CALL11(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC12(ret) HX_DYNAMIC_CALL12(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC13(ret) HX_DYNAMIC_CALL13(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC14(ret) HX_DYNAMIC_CALL14(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC15(ret) HX_DYNAMIC_CALL15(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC16(ret) HX_DYNAMIC_CALL16(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC17(ret) HX_DYNAMIC_CALL17(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC18(ret) HX_DYNAMIC_CALL18(ret, HX_LOCAL_RUN ) };
+#define HX_END_LOCAL_FUNC19(ret) HX_DYNAMIC_CALL19(ret, HX_LOCAL_RUN ) };
 
 // For compatibility until next version of haxe is released
 #define HX_BEGIN_LOCAL_FUNC0(name) \
@@ -806,6 +833,48 @@ static  ::Dynamic Create##enum_obj(::String inName,hx::DynamicArray inArgs) \
     ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20,const Dynamic &inArg21,const Dynamic &inArg22,const Dynamic &inArg23,const Dynamic &inArg24); \
     ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20,const Dynamic &inArg21,const Dynamic &inArg22,const Dynamic &inArg23,const Dynamic &inArg24,const Dynamic &inArg25); \
  
+
+
+#define HX_DECLARE_VARIANT_FUNCTIONS \
+  inline  ::Dynamic operator()(); \
+   inline  ::Dynamic operator()(const Dynamic &inArg0); \
+   inline  ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1); \
+   inline  ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2); \
+   inline  ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3); \
+   inline  ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20,const Dynamic &inArg21); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20,const Dynamic &inArg21,const Dynamic &inArg22); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20,const Dynamic &inArg21,const Dynamic &inArg22,const Dynamic &inArg23); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20,const Dynamic &inArg21,const Dynamic &inArg22,const Dynamic &inArg23,const Dynamic &inArg24); \
+    ::Dynamic operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4,const Dynamic &inArg5,const Dynamic &inArg6,const Dynamic &inArg7,const Dynamic &inArg8,const Dynamic &inArg9,const Dynamic &inArg10,const Dynamic &inArg11,const Dynamic &inArg12,const Dynamic &inArg13,const Dynamic &inArg14,const Dynamic &inArg15,const Dynamic &inArg16,const Dynamic &inArg17,const Dynamic &inArg18,const Dynamic &inArg19,const Dynamic &inArg20,const Dynamic &inArg21,const Dynamic &inArg22,const Dynamic &inArg23,const Dynamic &inArg24,const Dynamic &inArg25); \
+ 
+
+
+#define HX_IMPLEMNET_INLINE_VARIANT_FUNCTIONS \
+  ::Dynamic Variant::operator()() { CheckFPtr(); return valObject->__run(); } \
+   ::Dynamic Variant::operator()(const Dynamic &inArg0) { CheckFPtr(); return valObject->__run(inArg0); } \
+   ::Dynamic Variant::operator()(const Dynamic &inArg0,const Dynamic &inArg1) { CheckFPtr(); return valObject->__run(inArg0,inArg1); } \
+   ::Dynamic Variant::operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2) { CheckFPtr(); return valObject->__run(inArg0,inArg1,inArg2); } \
+   ::Dynamic Variant::operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3) { CheckFPtr(); return valObject->__run(inArg0,inArg1,inArg2,inArg3); } \
+   ::Dynamic Variant::operator()(const Dynamic &inArg0,const Dynamic &inArg1,const Dynamic &inArg2,const Dynamic &inArg3,const Dynamic &inArg4) { CheckFPtr(); return valObject->__run(inArg0,inArg1,inArg2,inArg3,inArg4); } \
+                                           
+
 
 
 

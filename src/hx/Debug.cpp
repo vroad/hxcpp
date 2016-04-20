@@ -9,7 +9,9 @@
 #include <hx/OS.h>
 #include "QuickVec.h"
 
-#ifdef ANDROID
+#ifdef HX_WINRT
+#define DBGLOG WINRT_LOG
+#elif defined(ANDROID)
 #include <android/log.h>
 #define DBGLOG(...) __android_log_print(ANDROID_LOG_INFO, "HXCPP", __VA_ARGS__)
 #else
@@ -147,15 +149,11 @@ public:
    
         if (gThreadRefCount == 1) {
 #if defined(HX_WINDOWS)
-#ifndef HX_WINRT
             _beginthreadex(0, 0, ProfileMainLoop, 0, 0, 0);
-#else
-        // TODO
-#endif
 #else
             pthread_t result;
             pthread_create(&result, 0, ProfileMainLoop, 0);
-   #endif
+#endif
 }
 
         gThreadMutex.Unlock();
@@ -223,6 +221,9 @@ public:
 
         int size = results.size();
 
+#ifdef HX_WINRT
+#define PROFILE_PRINT WINRT_LOG
+#else
 #define PROFILE_PRINT(...)                      \
         if (out) {                              \
             fprintf(out, __VA_ARGS__);          \
@@ -230,7 +231,7 @@ public:
         else {                                  \
             DBGLOG(__VA_ARGS__);                \
         }
-
+#endif
         for (int i = 0; i < size; i++) {
             ResultsEntry &re = results[i];
             PROFILE_PRINT("%s %.2f%%/%.2f%%\n", re.fullName, re.total * scale,
@@ -298,11 +299,7 @@ struct ProfileEntry
 
         while (gThreadRefCount > 0) { 
 #ifdef HX_WINDOWS
-#ifndef HX_WINRT
             Sleep(millis);
-#else
-            // TODO
-#endif
 #else
             struct timespec t;
             struct timespec tmp;
@@ -368,6 +365,7 @@ public:
         allocStackIdMapRoot.terminationStackId = 0;
         gcTimer = 0;
         gcTimerTemp = 0;
+        gcOverhead = 0;
         _last_obj = 0;
 
         profiler_enabled = profiler_en;
@@ -385,15 +383,11 @@ public:
         gThreadRefCount += 1;
         if (gThreadRefCount == 1) {
 #if defined(HX_WINDOWS)
-#ifndef HX_WINRT
             _beginthreadex(0, 0, ProfileMainLoop, 0, 0, 0);
-#else
-        // TODO
-#endif
 #else
             pthread_t result;
             pthread_create(&result, 0, ProfileMainLoop, 0);
-   #endif
+#endif
 }
 
         gThreadMutex.Unlock();
@@ -420,6 +414,9 @@ public:
 
       stash->gctime = gcTimer*1000000; // usec
       gcTimer = 0;
+
+      stash->gcoverhead = gcOverhead*1000000; // usec
+      gcOverhead = 0;
 
       alloc_mutex.Lock();
 
@@ -512,7 +509,7 @@ public:
 
       int obj_id = __hxt_ptr_id(_last_obj);
       alloc_mutex.Lock();
-      std::map<int, hx::Telemetry*>::iterator exist = alloc_map.find(obj_id);
+      std::map<void*, hx::Telemetry*>::iterator exist = alloc_map.find(_last_obj);
       if (exist != alloc_map.end() && _last_obj!=(NULL)) {
         type = "_unknown";
         int vtt = _last_obj->__GetType();
@@ -542,17 +539,10 @@ public:
       allocation_data->push_back(id);
     }
 
-    static void HXTReclaim(void* obj)
-    {
-      alloc_mutex.Lock();
-      HXTReclaimInternal(obj);
-      alloc_mutex.Unlock();
-    }
-
     static void HXTReclaimInternal(void* obj)
     {
       int obj_id = __hxt_ptr_id(obj);
-      std::map<int, hx::Telemetry*>::iterator exist = alloc_map.find(obj_id);
+      std::map<void*, hx::Telemetry*>::iterator exist = alloc_map.find(obj);
       if (exist != alloc_map.end()) {
         Telemetry* telemetry = exist->second;
         if (telemetry) {
@@ -568,6 +558,37 @@ public:
       }
     }
 
+    static void HXTAfterMark(int gByteMarkID, int ENDIAN_MARK_ID_BYTE)
+    {
+      double t0 = __hxcpp_time_stamp();
+
+      Telemetry* telemetry = 0;
+      alloc_mutex.Lock();
+      std::map<void*, hx::Telemetry*>::iterator iter = alloc_map.begin();
+      while (iter != alloc_map.end()) {
+        void* obj = iter->first;
+        unsigned char mark = ((unsigned char *)obj)[ENDIAN_MARK_ID_BYTE];
+        if ( mark!=gByteMarkID ) {
+          // not marked, deallocated
+          telemetry = iter->second;
+          if (telemetry) {
+            int obj_id = __hxt_ptr_id(obj);
+            telemetry->reclaim(obj_id);
+          }
+          alloc_map.erase(iter++);
+        } else {
+          iter++;
+        }
+      }
+      alloc_mutex.Unlock();
+
+      // Report overhead on one of the telemetry instances
+      // TODO: something better?
+      if (telemetry) {
+        telemetry->gcOverhead += __hxcpp_time_stamp() - t0;
+      }
+    }
+
 private:
 
     void push_callstack_ids_into(hx::CallStack *stack, std::vector<int> *list);
@@ -580,11 +601,7 @@ private:
 
         while (gThreadRefCount > 0) { 
 #ifdef HX_WINDOWS
-#ifndef HX_WINRT
             Sleep(millis);
-#else
-            // TODO
-#endif
 #else
             struct timespec t;
             struct timespec tmp;
@@ -619,6 +636,7 @@ private:
 
     double gcTimer;
     double gcTimerTemp;
+    double gcOverhead;
 
     int ignoreAllocs;
 
@@ -633,14 +651,14 @@ private:
     static int gProfileClock;
 
     static MyMutex alloc_mutex;
-    static std::map<int, Telemetry*> alloc_map;
+    static std::map<void*, Telemetry*> alloc_map;
 };
 /* static */ MyMutex Telemetry::gStashMutex;
 /* static */ MyMutex Telemetry::gThreadMutex;
 /* static */ int Telemetry::gThreadRefCount;
 /* static */ int Telemetry::gProfileClock;
 /* static */ MyMutex Telemetry::alloc_mutex;
-/* static */ std::map<int, Telemetry*> Telemetry::alloc_map;
+/* static */ std::map<void*, Telemetry*> Telemetry::alloc_map;
 
 #endif // HXCPP_TELEMETRY
 
@@ -2222,11 +2240,9 @@ void __hxcpp_dbg_threadCreatedOrTerminated(int threadNumber, bool created)
 
 Dynamic __hxcpp_dbg_checkedThrow(Dynamic toThrow)
 {
-    if (!hx::CallStack::CanBeCaught(toThrow)) {
-        hx::CriticalErrorHandler(HX_CSTRING("Uncatchable Throw: " +
-                                            toThrow->toString()), true);
-      }
-
+    if (!hx::CallStack::CanBeCaught(toThrow))
+        hx::CriticalErrorHandler(HX_CSTRING("Uncatchable Throw: ") +
+                                            toThrow->toString(), true);
     return hx::Throw(toThrow);
 }
 
@@ -2473,7 +2489,7 @@ void hx::Telemetry::HXTAllocation(CallStack *stack, void* obj, size_t inSize, co
 
     // HXT debug: Check for id collision
 #ifdef HXCPP_TELEMETRY_DEBUG
-    std::map<int, hx::Telemetry*>::iterator exist = alloc_map.find(obj_id);
+    std::map<void*, hx::Telemetry*>::iterator exist = alloc_map.find(obj);
     if (exist != alloc_map.end()) {
       printf("HXT ERR: Object id collision! at on %016lx, id=%016lx\n", obj, obj_id);
       throw "uh oh";
@@ -2497,9 +2513,9 @@ void hx::Telemetry::HXTAllocation(CallStack *stack, void* obj, size_t inSize, co
     allocation_data->push_back((int)inSize);
     allocation_data->push_back(stackid);
 
-    alloc_map[obj_id] = this;
+    alloc_map[obj] = this;
 
-    __hxcpp_set_hxt_finalizer(obj, (void*)Telemetry::HXTReclaim);
+    //__hxcpp_set_hxt_finalizer(obj, (void*)Telemetry::HXTReclaim);
 
     //printf("Tracking alloc %s at %016lx, id=%016lx, s=%d for telemetry %016lx, ts=%f\n", type, obj, obj_id, inSize, this, __hxcpp_time_stamp());
 
@@ -2515,7 +2531,7 @@ void hx::Telemetry::HXTRealloc(void* old_obj, void* new_obj, int new_size)
     alloc_mutex.Lock();
 
     // Only track reallocations of objects currently known to be allocated
-    std::map<int, hx::Telemetry*>::iterator exist = alloc_map.find(old_obj_id);
+    std::map<void*, hx::Telemetry*>::iterator exist = alloc_map.find(old_obj);
     if (exist != alloc_map.end()) {
       Telemetry* t = exist->second;
       t->allocation_data->push_back(2); // realloc flag (necessary?)
@@ -2527,14 +2543,14 @@ void hx::Telemetry::HXTRealloc(void* old_obj, void* new_obj, int new_size)
 
       // HXT debug: Check for id collision
 #ifdef HXCPP_TELEMETRY_DEBUG
-      std::map<int, hx::Telemetry*>::iterator exist_new = alloc_map.find(new_obj_id);
+      std::map<void*, hx::Telemetry*>::iterator exist_new = alloc_map.find(new_obj);
       if (exist_new != alloc_map.end()) {
         printf("HXT ERR: Object id collision (reloc)! at on %016lx, id=%016lx\n", (unsigned long)new_obj, (unsigned long)new_obj_id);
         throw "uh oh";
       }
 #endif
 
-      __hxcpp_set_hxt_finalizer(old_obj, (void*)0); // remove old finalizer -- should GCInternal.InternalRealloc do this?
+      //__hxcpp_set_hxt_finalizer(old_obj, (void*)0); // remove old finalizer -- should GCInternal.InternalRealloc do this?
       HXTReclaimInternal(old_obj); // count old as reclaimed
     } else {
       //printf("Not tracking re-alloc of untracked %016lx, id=%016lx\n", old_obj, old_obj_id);
@@ -2542,8 +2558,8 @@ void hx::Telemetry::HXTRealloc(void* old_obj, void* new_obj, int new_size)
       return;
     }
 
-    alloc_map[new_obj_id] = this;
-    __hxcpp_set_hxt_finalizer(new_obj, (void*)HXTReclaim);
+    alloc_map[new_obj] = this;
+    //__hxcpp_set_hxt_finalizer(new_obj, (void*)HXTReclaim);
 
     //printf("Tracking re-alloc from %016lx, id=%016lx to %016lx, id=%016lx at %f\n", old_obj, old_obj_id, new_obj, new_obj_id, __hxcpp_time_stamp());
 
@@ -2694,10 +2710,10 @@ void __hxt_new_hash(void* obj, int inSize)
   hx::CallStack::HXTAllocation(obj, inSize, (const char*)"Hash");
   #endif
 }
-void __hxt_gc_new(void* obj, int inSize)
+void __hxt_gc_new(void* obj, int inSize, const char* name)
 {
   #ifdef HXCPP_STACK_TRACE
-  hx::CallStack::HXTAllocation(obj, inSize, (const char*)0);
+  hx::CallStack::HXTAllocation(obj, inSize, name);
   #endif
 }
 void __hxt_gc_realloc(void* old_obj, void* new_obj, int new_size)
@@ -2714,7 +2730,12 @@ void __hxt_gc_end()
 {
   hx::CallStack::HXTGCEnd();
 }
-#endif
+void __hxt_gc_after_mark(int gByteMarkID, int ENDIAN_MARK_ID_BYTE)
+{
+  hx::Telemetry::HXTAfterMark(gByteMarkID, ENDIAN_MARK_ID_BYTE);
+}
+
+#endif // HXCPP_TELEMETRY
 
 
 void __hxcpp_execution_trace(int inLevel)

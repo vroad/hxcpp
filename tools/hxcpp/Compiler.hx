@@ -14,6 +14,7 @@ class Compiler
    public var mExe:String;
    public var mOutFlag:String;
    public var mObjDir:String;
+   public var mRelObjDir:String;
    public var mExt:String;
 
    public var mPCHExt:String;
@@ -52,7 +53,9 @@ class Compiler
 
    public function objToAbsolute()
    {
-      mObjDir = Path.normalize( PathManager.combine( Sys.getCwd(), mObjDir ) );
+      if (mRelObjDir==null)
+         mRelObjDir = mObjDir;
+      mObjDir = Path.normalize( PathManager.combine( Sys.getCwd(), mRelObjDir ) );
    }
 
    function addIdentity(ext:String,ioArgs:Array<String>)
@@ -94,7 +97,7 @@ class Compiler
          args = args.concat(mOBJCFlags);
       else if (ext=="mm")
          args = args.concat(mMMFlags);
-      else if (ext=="cpp" || ext=="c++")
+      else if (ext=="cpp" || ext=="c++" || ext=="cc")
       {
          allowPch = true;
          args = args.concat(mCPPFlags);
@@ -155,14 +158,14 @@ class Compiler
          {
             if (BuildTool.threadExitCode == 0)
             {
-               var err = ProcessManager.runProcessThreaded(mExe, args, "Compiling " + inFile.mName);
+               var err = ProcessManager.runProcessThreaded(mExe, args, " - \x1b[1mCompile :\x1b[0m " + inFile.mName);
                if (err!=0)
                   BuildTool.setThreadError(err);
             }
          }
          else
          {
-            var result = ProcessManager.runProcessThreaded(mExe, args, "Compiling " + inFile.mName);
+            var result = ProcessManager.runProcessThreaded(mExe, args, " - \x1b[1mCompile:\x1b[0m " + inFile.mName);
             if (result!=0)
             {
                if (FileSystem.exists(obj_name))
@@ -215,7 +218,7 @@ class Compiler
    public function getObjName(inFile:File)
    {
       var path = new Path(inFile.mName);
-      var dirId = Md5.encode(BuildTool.targetKey + path.dir).substr(0,8) + "_";
+      var dirId = Md5.encode(BuildTool.targetKey + path.dir + inFile.mGroup.mId).substr(0,8) + "_";
 
       return PathManager.combine(mObjDir, dirId + path.file + mExt);
    }
