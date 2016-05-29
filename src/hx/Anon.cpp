@@ -322,7 +322,7 @@ hx::Class Anon_obj::__mClass;
 
 void Anon_obj::__boot()
 {
-   Static(__mClass) = hx::RegisterClass(HX_CSTRING("__Anon"),TCanCast<Anon_obj>,sNone,sNone,0,0,0,0);
+   Static(__mClass) = hx::_hx_RegisterClass(HX_CSTRING("__Anon"),TCanCast<Anon_obj>,sNone,sNone,0,0,0,0);
 }
 
 
@@ -352,7 +352,7 @@ String StringFromAnonFields(hx::Object *inPtr)
 
       array->push(fields[i]);
       array->push(HX_CSTRING(" => "));
-      array->push( inPtr->__Field( fields[i], hx::paccDynamic) );
+      array->push( inPtr->__Field( fields[i], HX_PROP_DYNAMIC) );
    }
    array->push(HX_CSTRING(" }"));
    return array->join(HX_CSTRING(""));

@@ -10,6 +10,8 @@
    #define HXCPP_API_LEVEL 0
 #endif
 
+#include "hx/HeaderVersion.h"
+
 #ifdef _MSC_VER
    #include <typeinfo.h>
    namespace hx { typedef ::type_info type_info; }
@@ -95,8 +97,8 @@ typedef char HX_CHAR;
 
 #ifdef HX_WINRT
 
-#define WINRT_LOG(fmt, ...) {char buf[1024];snprintf(buf,1024,"****LOG: %s(%d): %s \n    [" fmt "]\n",__FILE__,__LINE__,__FUNCTION__, __VA_ARGS__);OutputDebugString(buf);}
-#define WINRT_PRINTF(fmt, ...) {char buf[2048];snprintf(buf,2048,fmt,__VA_ARGS__);OutputDebugString(buf);}
+#define WINRT_LOG(fmt, ...) {char buf[1024];sprintf_s(buf,1024,"****LOG: %s(%d): %s \n    [" fmt "]\n",__FILE__,__LINE__,__FUNCTION__, __VA_ARGS__);OutputDebugString(buf);}
+#define WINRT_PRINTF(fmt, ...) {char buf[2048];sprintf_s(buf,2048,fmt,__VA_ARGS__);OutputDebugString(buf);}
 
 #endif
 
@@ -215,6 +217,7 @@ namespace cpp
    #endif
    typedef float Float32;
    typedef double Float64;
+   typedef volatile int AtomicInt;
 };
 // Extended mapping - old way
 namespace haxe { namespace io { typedef unsigned char Unsigned_char__; } }
@@ -332,8 +335,10 @@ typedef bool PropertyAccess;
 #include <hx/Debug.h>
 #include <hx/Boot.h>
 #include <hx/Undefine.h>
-#if (HXCPP_API_LEVEL>=300)
+#if (HXCPP_API_LEVEL>=330)
 #include <hx/LessThanEq.h>
+#else
+#include <cpp/Int64.h>
 #endif
 
 #endif

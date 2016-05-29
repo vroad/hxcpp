@@ -1,5 +1,6 @@
 #include <hxcpp.h>
 #include <hxMath.h>
+#include <hx/Memory.h>
 
 #ifdef HX_WINDOWS
 #include <windows.h>
@@ -147,6 +148,7 @@ Array<unsigned char> __hxcpp_resource_bytes(String inName)
 
 // -- hx::Native -------
 
+#if HXCPP_API_LEVEL >= 330
 extern "C" void __hxcpp_lib_main();
 namespace hx
 {
@@ -164,6 +166,7 @@ namespace hx
       }
    }
 }
+#endif
 
 
 // --- System ---------------------------------------------------------------------
@@ -226,8 +229,8 @@ void __trace(Dynamic inObj, Dynamic inData)
 {
 #ifdef HX_WINRT
    WINRT_PRINTF("%s:%d: %s\n",
-               inData==null() ? "?" : inData->__Field( HX_CSTRING("fileName") , HX_PROP_DYNAMIC) ->toString().__s,
-               inData==null() ? 0 : inData->__Field( HX_CSTRING("lineNumber") , HX_PROP_DYNAMIC)->__ToInt(),
+               inData==null() ? "?" : Dynamic((inData)->__Field(HX_CSTRING("fileName"), HX_PROP_DYNAMIC))->toString().__s,
+               inData==null() ? 0 : Dynamic((inData)->__Field( HX_CSTRING("lineNumber") , HX_PROP_DYNAMIC))->__ToInt(),
                inObj.GetPtr() ? inObj->toString().__s : "null" );
 #elif defined(TIZEN)
    AppLogInternal(inData==null() ? "?" : Dynamic(inData->__Field( HX_CSTRING("fileName")), HX_PROP_DYNAMIC)->toString().__s,
@@ -332,12 +335,22 @@ static void ParseCommandLine(LPTSTR psrc, Array<String> &out)
     LPTSTR pStart = psrc;
     bool skipQuote = false;
 
+    // Pairs of double-quotes vanish...
+    while(psrc[0]=='\"' && psrc[1]=='\"')
+       psrc += 2;
+
     if (*psrc == '\"')
     {
         // scan from just past the first double-quote through the next
         // double-quote, or up to a null, whichever comes first
-        while ((*(++psrc) != '\"') && (*psrc != '\0'))
-            continue;
+        psrc++;
+        while ((*psrc!= '\"') && (*psrc != '\0'))
+        {
+           psrc++;
+           // Pairs of double-quotes vanish...
+           while(psrc[0]=='\"' && psrc[1]=='\"')
+              psrc += 2;
+        }
 
         skipQuote = true;
     }
@@ -506,28 +519,28 @@ Array<String> __get_args()
 }
 
 
-void __hxcpp_print(Dynamic &inV)
+void __hxcpp_print_string(const String &inV)
 {
    #ifdef HX_WINRT
-   WINRT_PRINTF("%s",inV->toString().__s);
+   WINRT_PRINTF("%s",inV.__s);
    #else
    #ifdef HX_UTF8_STRINGS
-   printf("%s",inV->toString().__s);
+   printf("%s",inV.__s);
    #else
-   printf("%S",inV->toString().__s);
+   printf("%S",inV.__s);
    #endif
    #endif
 }
 
-void __hxcpp_println(Dynamic &inV)
+void __hxcpp_println_string(const String &inV)
 {
    #ifdef HX_WINRT
-   WINRT_PRINTF("%s\n",inV->toString().__s);
+   WINRT_PRINTF("%s\n",inV.__s);
    #else
    #ifdef HX_UTF8_STRINGS
-   printf("%s\n",inV->toString().__s);
+   printf("%s\n",inV.__s);
    #else
-   printf("%S\n",inV->toString().__s);
+   printf("%S\n",inV.__s);
    #endif
    #endif
 }
@@ -681,7 +694,7 @@ int  __hxcpp_field_to_id( const char *inFieldName )
    if (!sgFieldToStringAlloc)
    {
       sgFieldToStringAlloc = 100;
-      sgFieldToString = (String *)malloc(sgFieldToStringAlloc * sizeof(String));
+      sgFieldToString = (String *)HxAlloc(sgFieldToStringAlloc * sizeof(String));
 
       sgStringToField = new StringToField;
    }

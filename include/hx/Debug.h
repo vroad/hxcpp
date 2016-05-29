@@ -173,6 +173,16 @@ public:
     StackCatchable *catchables;
 };
 
+template<typename T> struct StackVariableWrapper
+{
+   typedef T wrapper;
+};
+
+template<typename T> struct StackVariableWrapper<T *>
+{
+   typedef cpp::Pointer<T> wrapper;
+};
+
 
 class StackVariable
 {
@@ -245,11 +255,13 @@ private:
     template<typename T>
     static Dynamic GetOrSetFunction(bool get, void *ptr, Dynamic *dynamic)
     {
+       typedef typename StackVariableWrapper<T>::wrapper Wrap;
+
         if (get) {
-            return * (T *) ptr;
+            return Wrap(* (T *) ptr);
         }
         else {
-            * (T *) ptr = *dynamic;
+            * (T *) ptr = Wrap(*dynamic);
             return null();
         }
     }
@@ -391,6 +403,12 @@ extern volatile bool gShouldCallHandleBreakpoints;
 #define HX_STACK_VAR(cpp_var, haxe_name)                                \
     hx::StackVariable __stackvariable_##cpp_var                         \
         (__stackframe.variables, false, haxe_name, &cpp_var);
+
+#define HX_VAR(type,name) type name; HX_STACK_VAR(name, #name)
+#define HX_VARI(type,name) type name; HX_STACK_VAR(name, #name) name
+#define HX_VAR_NAME(type,name,dbgName) type name; HX_STACK_VAR(name, dbgName)
+#define HX_VARI_NAME(type,name,dbgName) type name; HX_STACK_VAR(name, dbgName) name
+
 #endif // HXCPP_STACK_VARS
 
 // Emitted after every Haxe line.  number is the original Haxe line number.
@@ -449,7 +467,13 @@ extern volatile bool gShouldCallHandleBreakpoints;
 #define HX_STACK_ARG(cpp_var, haxe_name)
 #endif
 #ifndef HX_STACK_VAR
+
 #define HX_STACK_VAR(cpp_var, haxe_name)
+#define HX_VAR(type,name) type name
+#define HX_VARI(type,name) type name
+#define HX_VAR_NAME(type,name,dbgName) type name
+#define HX_VARI_NAME(type,name,dbgName) type name
+
 #endif
 #ifndef HX_STACK_LINE
 #define HX_STACK_LINE(number)

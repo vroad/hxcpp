@@ -6,7 +6,7 @@
 DECLARE_TLS_DATA(class hxThreadInfo, tlsCurrentThread);
 
 // g_threadInfoMutex allows atomic access to g_nextThreadNumber
-static MyMutex g_threadInfoMutex;
+static HxMutex g_threadInfoMutex;
 // Thread number 0 is reserved for the main thread
 static int g_nextThreadNumber = 1;
 
@@ -51,8 +51,8 @@ struct Deque : public Array_obj<Dynamic>
    #endif
 
 
-	#ifdef HX_WINDOWS
-	MyMutex     mMutex;
+	#ifndef HX_THREAD_SEMAPHORE_LOCKABLE
+	HxMutex     mMutex;
 	void PushBack(Dynamic inValue)
 	{
 		hx::EnterGCFreeZone();
@@ -121,12 +121,15 @@ struct Deque : public Array_obj<Dynamic>
 		while(inBlock && !length)
 			mSemaphore.QWait();
 		hx::ExitGCFreeZone();
-		return shift();
+		Dynamic result =  shift();
+		if (length)
+			mSemaphore.QSet();
+		return result;
 	}
 	#endif
 
 	hx::InternalFinalizer *mFinalizer;
-	MySemaphore mSemaphore;
+	HxSemaphore mSemaphore;
 };
 
 Dynamic __hxcpp_deque_create()
@@ -168,7 +171,7 @@ public:
 	hxThreadInfo(Dynamic inFunction, int inThreadNumber)
         : mFunction(inFunction), mThreadNumber(inThreadNumber), mTLS(0,0)
 	{
-		mSemaphore = new MySemaphore;
+		mSemaphore = new HxSemaphore;
 		mDeque = Deque::Create();
 	}
 	hxThreadInfo()
@@ -219,7 +222,7 @@ public:
 
 
 	Array<Dynamic> mTLS;
-	MySemaphore *mSemaphore;
+	HxSemaphore *mSemaphore;
 	Dynamic mFunction;
     int mThreadNumber;
 	Deque   *mDeque;
@@ -276,22 +279,11 @@ Dynamic __hxcpp_thread_create(Dynamic inStart)
 	hx::GCPrepareMultiThreaded();
 	hx::EnterGCFreeZone();
 
-   #ifdef HX_WINDOWS
-      bool ok = _beginthreadex(0,0,hxThreadFunc,info,0,0) != 0;
-   #else
-      pthread_t result = 0;
-      int created = pthread_create(&result,0,hxThreadFunc,info);
-      bool ok = created==0;
-   #endif
-
-
-     if (ok)
-     {
-        #ifndef HX_WINDOWS
-        pthread_detach(result);
-        #endif
-        info->mSemaphore->Wait();
-     }
+    bool ok = HxCreateDetachedThread(hxThreadFunc, info);
+    if (ok)
+    {
+       info->mSemaphore->Wait();
+    }
 
     hx::ExitGCFreeZone();
     info->CleanSemaphore();
@@ -398,7 +390,7 @@ public:
 	}
 
 
-   MyMutex mMutex;
+   HxMutex mMutex;
 };
 
 
@@ -518,8 +510,8 @@ public:
 	}
 
 
-	MySemaphore mNotEmpty;
-   MyMutex     mAvailableLock;
+	HxSemaphore mNotEmpty;
+   HxMutex     mAvailableLock;
 	int         mAvailable;
 };
 
@@ -555,3 +547,22 @@ int __hxcpp_GetCurrentThreadNumber()
     }
     return threadInfo->GetThreadNumber();
 }
+
+// --- Atomic ---
+
+bool _hx_atomic_exchange_if(::cpp::Pointer<cpp::AtomicInt> inPtr, int test, int  newVal )
+{
+   return HxAtomicExchangeIf(test, newVal, inPtr);
+}
+
+int _hx_atomic_inc(::cpp::Pointer<cpp::AtomicInt> inPtr )
+{
+   return HxAtomicInc(inPtr);
+}
+
+int _hx_atomic_dec(::cpp::Pointer<cpp::AtomicInt> inPtr )
+{
+   return HxAtomicDec(inPtr);
+}
+
+
