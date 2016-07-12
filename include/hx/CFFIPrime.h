@@ -14,32 +14,22 @@ struct HxString
    {
       length = inRHS.length;
       __s = inRHS.__s;
-      cffiString = inRHS.cffiString;
    }
-   inline HxString(const char *inS,int inLen=-1, bool allocate = false) : length(inLen), __s(inS)
+   inline HxString(const char *inS,int inLen=-1) : length(inLen), __s(inS)
    {
       if (!inS)
          length = 0;
       else if (length<0)
          for(length=0; __s[length]; length++) { }
-      cffiString = allocate ? alloc_string_len (__s, length) : 0;
    }
 
    inline int size() { return length; }
    inline const char *c_str() { return __s; }
-   inline value cffi_str()
-   {
-      if (cffiString == 0)
-         cffiString = alloc_string_len (__s, length);
-      
-      return cffiString;
-   }
 
-   inline HxString() : length(0), __s(0), cffiString(0) { }
+   inline HxString() : length(0), __s(0) { }
 
    int length;
    const char *__s;
-   value cffiString;
 
 };
 #endif
@@ -246,7 +236,7 @@ inline value ToValue(float inVal) { return alloc_float(inVal); }
 inline value ToValue(double inVal) { return alloc_float(inVal); }
 inline value ToValue(value inVal) { return inVal; }
 inline value ToValue(bool inVal) { return alloc_bool(inVal); }
-inline value ToValue(HxString inVal) { return inVal.cffi_str(); }
+inline value ToValue(HxString inVal) { return inVal.__s ? alloc_string_len(inVal.c_str(),inVal.size()) : alloc_null() ; }
 
 struct AutoValue
 {
