@@ -50,6 +50,8 @@
   <flag value="-m64" if="HXCPP_M64"/>
   <flag value="-DHXCPP_M64" if="HXCPP_M64"/>
   <flag value="-I${HXCPP}/include"/>
+  <cppflag value="-std=c++11" if="HXCPP_CPP11"/>
+  <flag value="-DHXCPP_CPP11" if="HXCPP_CPP11"/>
   <objdir value="obj/linux${OBJEXT}/"/>
   <outflag value="-o"/>
   <ext value=".o"/>
