@@ -1,6 +1,7 @@
 #include <hxcpp.h>
 #include <hx/Scriptable.h>
 #include <hx/GC.h>
+#include <hx/Unordered.h>
 #include <stdio.h>
 #include <vector>
 #include <string>
@@ -102,6 +103,10 @@ CppiaModule::CppiaModule()
 
 void CppiaModule::setDebug(CppiaExpr *outExpr, int inFileId, int inLine)
 {
+   #ifdef HXCPP_DEBUGGER
+   if (inFileId)
+      allFileIds.insert(inFileId);
+   #endif
    outExpr->className = creatingClass;
    outExpr->functionName = creatingFunction;
    outExpr->filename = cStrings[inFileId].c_str();
@@ -453,6 +458,13 @@ struct ScriptCallable : public CppiaDynamicExpr
    void    *compiled;
    #endif
 
+   #ifdef HXCPP_STACK_SCRIPTABLE
+   CppiaStackVarMap varMap;
+   #endif
+
+   hx::StackPosition          position;
+
+
    std::vector<CppiaStackVar *> captureVars;
    int                          captureSize;
 
@@ -517,9 +529,91 @@ struct ScriptCallable : public CppiaDynamicExpr
       captureVars.swap(layout.captureVars);
       captureSize = layout.captureSize;
 
+      #ifdef HXCPP_STACK_SCRIPTABLE
+      std::swap(varMap,layout.varMap);
+      #endif
+
       stackSize = layout.size;
       inModule.layout = oldLayout;
+
+      position.className = className;
+      position.functionName = functionName;
+      position.fileName = filename;
+      position.fullName = filename;
+
+      #ifdef HXCPP_DEBUGGER
+      position.fileHash = Hash(0,filename);
+      int hash = Hash(0,className);
+      hash = Hash(hash,".");
+      position.classFuncHash = Hash(hash,functionName);
+      #endif
+
       return this;
+   }
+
+   #ifdef HXCPP_STACK_SCRIPTABLE
+   void getScriptableVariables(unsigned char *inFrame, Array<Dynamic> outNames)
+   {
+      hx::Object *thizz = *(hx::Object **)inFrame;
+      if (thizz)
+         outNames->push(HX_CSTRING("this"));
+
+      for(CppiaStackVarMap::iterator i=varMap.begin();i!=varMap.end();++i)
+      {
+         CppiaStackVar *var = i->second;
+         outNames->push(var->module->strings[ var->nameId] );
+      }
+   }
+
+
+   bool getScriptableValue(unsigned char *inFrame, String inName, ::Dynamic &outValue)
+   {
+      if (inName.length==4 && !strcmp(inName.__s,"this"))
+      {
+         outValue = *(hx::Object **)inFrame;
+         return true;
+      }
+
+
+      for(CppiaStackVarMap::iterator i=varMap.begin();i!=varMap.end();++i)
+      {
+         CppiaStackVar *var = i->second;
+         if ( var->module->strings[ var->nameId]==inName)
+         {
+            outValue = var->getInFrame(inFrame);
+            return true;
+         }
+      }
+
+      return false;
+   }
+
+
+   bool setScriptableValue(unsigned char *inFrame, String inName, ::Dynamic inValue)
+   {
+      for(CppiaStackVarMap::iterator i=varMap.begin();i!=varMap.end();++i)
+      {
+         CppiaStackVar *var = i->second;
+         if ( var->module->strings[ var->nameId]==inName)
+         {
+            var->setInFrame(inFrame,inValue);
+            return true;
+         }
+      }
+
+      return false;
+   }
+
+
+   #endif
+
+
+   static int Hash(int value, const char *inString)
+   {
+      if (inString)
+         while(*inString)
+            value = value*223 + *inString++;
+      return value;
    }
 
    ExprType getType() { return returnType; }
@@ -594,7 +688,7 @@ struct ScriptCallable : public CppiaDynamicExpr
              }
        }
    }
- 
+
 
    void genArgs(CppiaCompiler &compiler, CppiaExpr *inThis, Expressions &inArgs)
    {
@@ -948,6 +1042,8 @@ struct ScriptCallable : public CppiaDynamicExpr
    // Run the actual function
    void runFunction(CppiaCtx *ctx)
    {
+      CPPIA_STACK_FRAME(this);
+
       #ifdef CPPIA_JIT
       if (compiled)
       {
@@ -963,6 +1059,7 @@ struct ScriptCallable : public CppiaDynamicExpr
             memset(ctx->pointer, 0 , stackSize );
             ctx->pointer += stackSize;
          }
+         CPPIA_STACK_LINE(this);
          body->runVoid(ctx);
       }
    }
@@ -1179,6 +1276,43 @@ struct CppiaEnumConstructor
       return result;
    }
 };
+
+
+
+
+Array<String > gAllClasses;
+Array<String > gAllFiles;
+
+void addScriptableClass(String inName)
+{
+   #ifdef HXCPP_DEBUGGER
+   if (!gAllClasses.mPtr)
+   {
+      gAllClasses = Array_obj<Dynamic>::__new();
+      GCAddRoot( (hx::Object **)&gAllClasses.mPtr );
+   }
+   if (gAllClasses->indexOf(inName)<0)
+      gAllClasses->push(inName);
+   #endif
+}
+
+
+void addScriptableFile(String inName)
+{
+   #ifdef HXCPP_DEBUGGER
+   if (!gAllFiles.mPtr)
+   {
+      gAllFiles = Array_obj<Dynamic>::__new();
+      GCAddRoot( (hx::Object **)&gAllFiles.mPtr );
+   }
+   if (gAllFiles->indexOf(inName)<0)
+      gAllFiles->push(inName);
+   #endif
+}
+
+
+
+
 
 
 void runFunExpr(CppiaCtx *ctx, ScriptCallable *inFunExpr, hx::Object *inThis, Expressions &inArgs );
@@ -2476,6 +2610,7 @@ struct CppiaClassInfo
 };
 
 
+
 bool TypeData::isClassOf(Dynamic inInstance)
 {
    if (cppiaClass)
@@ -3061,8 +3196,8 @@ struct BlockCallable : public ScriptCallable
       unsigned char *pointer = ctx->pointer;
       ctx->push( ctx->getThis(false) );
       AutoStack save(ctx,pointer);
-      addStackVarsSpace(ctx);
       CPPIA_STACK_FRAME(this);
+      addStackVarsSpace(ctx);
       body->runVoid(ctx);
    }
    int runInt(CppiaCtx *ctx)
@@ -3070,8 +3205,8 @@ struct BlockCallable : public ScriptCallable
       unsigned char *pointer = ctx->pointer;
       ctx->push( ctx->getThis(false) );
       AutoStack save(ctx,pointer);
-      addStackVarsSpace(ctx);
       CPPIA_STACK_FRAME(this);
+      addStackVarsSpace(ctx);
       return body->runInt(ctx);
    }
    Float runFloat(CppiaCtx *ctx)
@@ -3079,8 +3214,8 @@ struct BlockCallable : public ScriptCallable
       unsigned char *pointer = ctx->pointer;
       ctx->push( ctx->getThis(false) );
       AutoStack save(ctx,pointer);
-      addStackVarsSpace(ctx);
       CPPIA_STACK_FRAME(this);
+      addStackVarsSpace(ctx);
       return body->runFloat(ctx);
    }
    hx::Object *runObject(CppiaCtx *ctx)
@@ -3088,8 +3223,8 @@ struct BlockCallable : public ScriptCallable
       unsigned char *pointer = ctx->pointer;
       ctx->push( ctx->getThis(false) );
       AutoStack save(ctx,pointer);
-      addStackVarsSpace(ctx);
       CPPIA_STACK_FRAME(this);
+      addStackVarsSpace(ctx);
       return body->runObject(ctx);
    }
 };
@@ -7883,16 +8018,28 @@ void CppiaModule::compile()
 }
 #endif
 
-
-/*
-CppiaClassInfo *CppiaModule::findClass(String inName)
+void CppiaModule::registerDebugger()
 {
+   #ifdef HXCPP_DEBUGGER
    for(int i=0;i<classes.size();i++)
-      if (strings[classes[i]->nameId] == inName)
+   {
+      addScriptableClass( String::makeConstString(classes[i]->name.c_str()) );
+   }
+
+   for(hx::UnorderedSet<int>::const_iterator i = allFileIds.begin(); i!=allFileIds.end(); ++i)
+      addScriptableFile(strings[*i]);
+
+   #endif
+}
+
+CppiaClassInfo *CppiaModule::findClass( ::String inName)
+{
+   std::string stdName(inName.__s, inName.__s + inName.length);
+   for(int i=0;i<classes.size();i++)
+      if (classes[i]->name == stdName)
          return classes[i];
    return 0;
 }
-*/
 
 
 void CppiaModule::mark(hx::MarkContext *__inCtx)
@@ -7936,39 +8083,97 @@ std::vector<hx::Resource> scriptResources;
 
 
 // Cppia Object - manage
-class CppiaObject : public hx::Object
+class CppiaObject : public hx::CppiaLoadedModule_obj
 {
 public:
-   CppiaModule *data;
+   CppiaModule *cppia;
+   bool        booted;
+
    CppiaObject(CppiaModule *inModule)
    {
-      data = inModule;
+      cppia = inModule;
       GCSetFinalizer( this, onRelease );
    }
    static void onRelease(hx::Object *inObj)
    {
-      delete ((CppiaObject *)inObj)->data;
+      delete ((CppiaObject *)inObj)->cppia;
    }
-   void __Mark(hx::MarkContext *ctx) { data->mark(ctx); }
+   void __Mark(hx::MarkContext *ctx) { cppia->mark(ctx); }
 #ifdef HXCPP_VISIT_ALLOCS
-   void __Visit(hx::VisitContext *ctx) { data->visit(ctx); }
+   void __Visit(hx::VisitContext *ctx) { cppia->visit(ctx); }
 #endif
+
+
+   void boot()
+   {
+      if (booted)
+         return;
+
+      booted = true;
+      try
+      {
+         DBGLOG("--- Boot --------------------------------------------\n");
+         CppiaCtx *ctx = CppiaCtx::getCurrent();
+         cppia->boot(ctx);
+      }
+      catch(const char *errorString)
+      {
+         String error(errorString);
+         hx::Throw(error);
+      }
+   }
+
+
+   void run()
+   {
+      if (!booted)
+         boot();
+      if (cppia->main)
+      {
+         try
+         {
+            //__hxcpp_enable(false);
+            DBGLOG("--- Run --------------------------------------------\n");
+            CppiaCtx *ctx = CppiaCtx::getCurrent();
+            ctx->runVoid(cppia->main);
+         }
+         catch(const char *errorString)
+         {
+            String error(errorString);
+            hx::Throw(error);
+         }
+      }
+   }
+
+   ::hx::Class resolveClass( ::String inName)
+   {
+      CppiaClassInfo *info = cppia->findClass(inName);
+      if (info)
+         return info->mClass;
+      return null();
+   }
+
 };
 
 
 
+Array<Dynamic> gAllCppiaModules;
 
-
-bool LoadCppia(String inValue)
+CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
 {
+   if (!gAllCppiaModules.mPtr)
+   {
+      gAllCppiaModules = Array_obj<Dynamic>::__new();
+      GCAddRoot( (hx::Object **)&gAllCppiaModules.mPtr );
+   }
+
    CppiaModule   *cppiaPtr = new CppiaModule();
-   hx::Object **ptrPtr = new hx::Object*[1];
-   *ptrPtr = new CppiaObject(cppiaPtr); 
-   GCAddRoot(ptrPtr);
+   CppiaLoadedModule loadedModule = new CppiaObject(cppiaPtr);
+   gAllCppiaModules->push(loadedModule);
 
 
    CppiaModule   &cppia = *cppiaPtr;
-   CppiaStream stream(cppiaPtr,inValue.__s, inValue.length);
+   CppiaStream stream(cppiaPtr,inData, inDataLength);
 
    String error;
    try
@@ -8016,6 +8221,8 @@ bool LoadCppia(String inValue)
       {
          DBGLOG("Main...\n");
          cppia.main = new ScriptCallable(createCppiaExpr(stream));
+         cppia.main->className = "cppia";
+         cppia.main->functionName = "__cppia_main";
       }
       else if (tok!="NOMAIN")
          throw "no main specified";
@@ -8088,31 +8295,15 @@ bool LoadCppia(String inValue)
       }
    #endif
 
-
-   if (!error.__s) try
-   {
-      //__hxcpp_enable(false);
-      DBGLOG("--- Run --------------------------------------------\n");
-
-      CppiaCtx *ctx = CppiaCtx::getCurrent();
-      cppia.boot(ctx);
-      if (cppia.main)
-      {
-         ctx->runVoid(cppia.main);
-         //printf("Result %s.\n", cppia.main->runString(&ctx).__s);
-      }
-      return true;
-   }
-   catch(const char *errorString)
-   {
-      error = String(errorString);
-   }
-
    if (error.__s)
       hx::Throw(error);
 
-   return false;
+   cppia.registerDebugger();
+
+   return loadedModule;
 }
+
+
 
 ::String ScriptableToString(void *inClass)
 {
@@ -8200,14 +8391,76 @@ void *hx::Object::_hx_getInterface(int inId)
 #endif
 
 
+} // end namespace hx
 
 
-};
 
+#ifdef HXCPP_STACK_SCRIPTABLE
+
+void __hxcpp_dbg_getScriptableVariables(hx::ScriptStackFrame *inFrame, ::Array<Dynamic> outNames)
+{
+   inFrame->callable->getScriptableVariables(inFrame->frame, outNames);
+}
+
+bool __hxcpp_dbg_getScriptableValue(hx::ScriptStackFrame *inFrame, String inName, ::Dynamic &outValue)
+{
+   return inFrame->callable->getScriptableValue(inFrame->frame, inName, outValue);
+}
+
+
+bool __hxcpp_dbg_setScriptableValue(hx::ScriptStackFrame *inFrame, String inName, ::Dynamic inValue)
+{
+   return inFrame->callable->setScriptableValue(inFrame->frame, inName, inValue);
+}
+
+#endif
+
+
+
+
+
+#ifdef HXCPP_DEBUGGER
+void __hxcpp_dbg_getScriptableFiles( Array< ::String> ioPaths )
+{
+   Array<String> merge = hx::gAllFiles;
+   if (merge.mPtr)
+      for(int i=0;i< merge->length; i++)
+      {
+         if (ioPaths->indexOf( merge[i] ) < 0)
+            ioPaths->push( merge[i] );
+      }
+}
+
+void __hxcpp_dbg_getScriptableFilesFullPath( Array< ::String> ioPaths )
+{
+   __hxcpp_dbg_getScriptableFiles( ioPaths );
+}
+
+void __hxcpp_dbg_getScriptableClasses( Array< ::String> ioClasses )
+{
+   Array<String> merge = hx::gAllClasses;
+   if (merge.mPtr)
+      for(int i=0;i< merge->length; i++)
+      {
+         if (ioClasses->indexOf( merge[i] ) < 0)
+            ioClasses->push( merge[i] );
+      }
+}
+
+#endif
+
+
+
+::hx::CppiaLoadedModule __scriptable_cppia_from_string(String inCode)
+{
+   return hx::LoadCppia((const unsigned char *)inCode.__s, inCode.length);
+}
 
 void __scriptable_load_cppia(String inCode)
 {
-   hx::LoadCppia(inCode);
+   ::hx::CppiaLoadedModule module = hx::LoadCppia((const unsigned char *)inCode.__s, inCode.length);
+   module->boot();
+   module->run();
 }
 
 

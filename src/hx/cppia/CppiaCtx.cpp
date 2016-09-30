@@ -49,6 +49,7 @@ CppiaCtx *CppiaCtx::getCurrent()
       sAllContexts.push_back(result);
       sCppiaCtxLock->Unlock();
    }
+   result->stackContext = StackContext::getCurrent();
    return result;
 }
 
@@ -96,7 +97,6 @@ struct AutoJmpBuf
 };
 
 #define GET_RETURN_VAL(RET,CHECK) \
-   CPPIA_STACK_FRAME(((CppiaExpr *)vtable)); \
    AutoJmpBuf autoJmpBuf(this); \
    if (setjmp(autoJmpBuf.here)) \
    { \
@@ -108,7 +108,6 @@ struct AutoJmpBuf
 #else
 
 #define GET_RETURN_VAL(RET,CHECK) \
-   CPPIA_STACK_FRAME(((CppiaExpr *)vtable)); \
    ((CppiaExpr *)vtable)->runFunction(this); \
    breakContReturn = 0; \
    DEBUG_RETURN_TYPE_CHECK \
@@ -225,5 +224,4 @@ hx::Object *runContextConvertObject(CppiaCtx *ctx, ExprType inType, void *inFunc
 
 
 } // end namespace hx
-
 
